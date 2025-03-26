@@ -45,7 +45,7 @@ class ArgillaDatabase:
             self.client = rg.Argilla(api_url=self.api_url, api_key=self.api_key)
             
             # Test connection by getting current user
-            user_info = self.client.me()
+            user_info = self.client.me
             self.user_id = getattr(user_info, 'id', self.user_id)
             logger.info(f"Successfully connected to Argilla as user: {self.user_id}")
             return True
@@ -138,7 +138,7 @@ class ArgillaDatabase:
                             rg.TextField(name="purpose", title="Purpose")
                         ],
                         questions=[
-                            rg.FloatQuestion(
+                            rg.NumberQuestion(
                                 name="average_score",
                                 title="Average Score",
                                 description="Average performance score for this prompt"
