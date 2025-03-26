@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import after path is set
-from database.argilla import ArgillaDatabase
+from archer.database.argilla import ArgillaDatabase
 
 class GradioApp:
     """
