@@ -7,13 +7,17 @@ architecture for optimization with AdaLflow.
 
 import os
 import sys
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple, Union, Callable
+import copy
+import json
+import re
+import time
 
 # Add the parent directory to sys.path to allow for imports from sibling directories
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from backwardPass.model import Model
-from helpers.prompt import Prompt
+from archer.helpers.prompt import Prompt
+from .model import Model
 from eval.danielson import generate_ai_content, normalize_score_integer
 
 class DanielsonModel(Model):

@@ -1,8 +1,9 @@
 """
-This module defines the GenerativeModel class for generating content using LLMs.
+This module provides the GenerativeModel class for generating content with language models.
 """
 
-from helpers.llm_call import llm_call as default_llm_call
+from typing import List, Dict, Any, Optional, Union, Tuple
+from archer.helpers.llm_call import llm_call as default_llm_call
 from ...helpers.logging_utils import get_logger, log_entry_exit, log_call_args
 
 # Setup logger for this module
