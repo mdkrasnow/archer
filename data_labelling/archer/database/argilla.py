@@ -144,10 +144,11 @@ class ArgillaDatabase:
                                 description="Average performance score for this prompt",
                                 values=[1, 2, 3, 4, 5]
                             ),
-                            rg.BooleanQuestion(
+                            rg.LabelQuestion(
                                 name="survived",
                                 title="Survived",
-                                description="Whether this prompt survived to the next generation"
+                                description="Whether this prompt survived to the next generation",
+                                labels=["True", "False"]
                             )
                         ],
                         metadata=[
