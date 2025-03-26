@@ -63,12 +63,13 @@ def llm_call(
     
     url = "https://openrouter.ai/api/v1/chat/completions"
     
+    # Set up the headers according to OpenRouter docs
     headers = {
         "Authorization": f"Bearer {openrouter_api_key}",
         "Content-Type": "application/json",
     }
     
-    # Add site info if provided
+    # Add site info if provided - using the correct format from OpenRouter docs
     if site_url:
         headers["HTTP-Referer"] = site_url
     if site_name:
@@ -92,7 +93,7 @@ def llm_call(
         payload["stream"] = True
     
     # Make the API call
-    response = requests.post(url=url, headers=headers, data=json.dumps(payload))
+    response = requests.post(url=url, headers=headers, json=payload)
     
     # Handle the response
     if stream:
