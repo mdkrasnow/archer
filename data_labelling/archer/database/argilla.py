@@ -141,7 +141,8 @@ class ArgillaDatabase:
                             rg.RatingQuestion(
                                 name="average_score",
                                 title="Average Score",
-                                description="Average performance score for this prompt"
+                                description="Average performance score for this prompt",
+                                values=[1, 2, 3, 4, 5]
                             ),
                             rg.BooleanQuestion(
                                 name="survived",
