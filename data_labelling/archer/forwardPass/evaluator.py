@@ -4,7 +4,7 @@ This module defines the AIExpert class for evaluating generated content.
 
 from typing import List, Dict, Any
 from archer.helpers.llm_call import llm_call
-
+import os
 class AIExpert:
     """
     A class for evaluating generated content against a rubric.
@@ -63,7 +63,7 @@ class AIExpert:
         
         try:
             # Mock API key for testing purposes
-            response = self.llm_call(messages=messages, model=self.model_name, openrouter_api_key="test_api_key")
+            response = self.llm_call(messages=messages, model=self.model_name, openrouter_api_key=os.getenv("OPENROUTER_API_KEY"))
             
             # Parse the response
             if response and "choices" in response and len(response["choices"]) > 0:

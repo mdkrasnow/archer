@@ -8,7 +8,7 @@ from openai import OpenAI
 
 def llm_call(
     messages: List[Dict[str, str]],
-    model: str = "openai/gemini-2.0-flash-turbo",
+    model: str = "google/gemini-2.0-flash",
     openrouter_api_key: str = None,
     site_url: Optional[str] = None,
     site_name: Optional[str] = None,
@@ -41,10 +41,11 @@ def llm_call(
         ValueError: If API key is missing and not in test mode.
         Exception: If the API call fails.
     """
-    if not openrouter_api_key:
-        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    # Get API key from parameter or environment variable
+    api_key = openrouter_api_key or os.getenv("OPENROUTER_API_KEY")
+    
     # Special handling for test environment
-    if openrouter_api_key == "test_api_key":
+    if api_key == "test_api_key":
         # Return a mock response for testing
         mock_content = "Score: 4\nFeedback: Good content but needs improvement\nImproved Output: This is an improved version\nSummary: Overall good with minor issues"
         return {
@@ -57,14 +58,13 @@ def llm_call(
             ]
         }
     
-    
-    if not openrouter_api_key:
+    if not api_key:
         raise ValueError("OpenRouter API key is required")
     
     # Initialize the OpenAI client with OpenRouter base URL
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_api_key,
+        api_key=api_key,
     )
     
     # Set up extra headers for site info if provided
