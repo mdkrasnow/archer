@@ -138,7 +138,7 @@ class ArgillaDatabase:
                             rg.TextField(name="purpose", title="Purpose")
                         ],
                         questions=[
-                            rg.NumberQuestion(
+                            rg.RatingQuestion(
                                 name="average_score",
                                 title="Average Score",
                                 description="Average performance score for this prompt"
