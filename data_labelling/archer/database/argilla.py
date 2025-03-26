@@ -31,6 +31,7 @@ class ArgillaDatabase:
         self.api_key = api_key or os.getenv("ARGILLA_API_KEY", "admin.apikey")
         self.client = None
         self.datasets = {}
+        self.user_id = "default_user"
         
     def connect(self) -> bool:
         """
@@ -90,11 +91,12 @@ class ArgillaDatabase:
                             description="Provide feedback on how to improve the output"
                         )
                     ],
-                    # metadata_properties=[
-                    #     rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                    #     rg.IntegerMetadataProperty(name="round", title="Round Number"),
-                    #     rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
-                    # ]
+                    metadata=[
+                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                        rg.TermsMetadataProperty(name="round", title="Round Number"),
+                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
+                        rg.TermsMetadataProperty(name="output_id", title="Output ID")
+                    ]
                 )
                 self.datasets["outputs"] = rg.Dataset(name="archer_outputs", settings=outputs_settings)
                 self.datasets["outputs"].create()
@@ -123,12 +125,12 @@ class ArgillaDatabase:
                             description="Whether this prompt survived to the next generation"
                         )
                     ],
-                    # metadata_properties=[
-                    #     rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                    #     rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
-                    #     rg.IntegerMetadataProperty(name="generation", title="Generation Number"),
-                    #     rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
-                    # ]
+                    metadata=[
+                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                        rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
+                        rg.TermsMetadataProperty(name="generation", title="Generation Number"),
+                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
+                    ]
                 )
                 self.datasets["prompts"] = rg.Dataset(name="archer_prompts", settings=prompts_settings)
                 self.datasets["prompts"].create()
@@ -159,13 +161,13 @@ class ArgillaDatabase:
                         ),
                         rg.TextField(name="improved_output", title="Improved Output")
                     ],
-                    # metadata_properties=[
-                    #     rg.TermsMetadataProperty(name="output_id", title="Output ID"),
-                    #     rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                    #     rg.TermsMetadataProperty(name="evaluator_id", title="Evaluator ID"),
-                    #     rg.IntegerMetadataProperty(name="is_human", title="Is Human Evaluation"),
-                    #     rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
-                    # ]
+                    metadata=[
+                        rg.TermsMetadataProperty(name="output_id", title="Output ID"),
+                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                        rg.TermsMetadataProperty(name="evaluator_id", title="Evaluator ID"),
+                        rg.TermsMetadataProperty(name="is_human", title="Is Human Evaluation"),
+                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
+                    ]
                 )
                 self.datasets["evaluations"] = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
                 self.datasets["evaluations"].create()
@@ -212,14 +214,14 @@ class ArgillaDatabase:
                 },
                 metadata={
                     "prompt_id": prompt_id,
-                    "round": round_num,
+                    "round": str(round_num),
                     "timestamp": datetime.now().isoformat(),
-                    "output_id": output_id  # Add output_id to metadata for easy retrieval
+                    "output_id": output_id
                 }
             )
             
             # Add the record to the dataset
-            self.datasets["outputs"].add_records([record])
+            self.datasets["outputs"].records.log([record])
             
             logger.info(f"Stored generated content with ID: {output_id}")
             return output_id
@@ -258,29 +260,32 @@ class ArgillaDatabase:
             # Create a unique ID for this evaluation
             evaluator_id = "human" if is_human else "ai_evaluator"
             
+            # Create responses
+            responses = [
+                rg.Response(question_name="score", value=score, user_id=self.user_id),
+                rg.Response(question_name="feedback", value=feedback, user_id=self.user_id),
+                rg.Response(question_name="improved_output", value=improved_output, user_id=self.user_id)
+            ]
+            
             # Create a record
             record = rg.Record(
                 fields={
-                    "input": output.get("input", ""),
-                    "generated_content": output.get("generated_content", ""),
+                    "input": output["fields"]["input"],
+                    "generated_content": output["fields"]["generated_content"],
                     "evaluation_content": ""  # This will be filled by responses
                 },
-                responses=[
-                    rg.Response(question_name="score", value=score, user_id=self.user_id),
-                    rg.Response(question_name="feedback", value=feedback, user_id=self.user_id),
-                    rg.Response(question_name="improved_output", value=improved_output, user_id=self.user_id)
-                ],
+                responses=responses,
                 metadata={
                     "output_id": output_id,
-                    "prompt_id": output.get("prompt_id", ""),
+                    "prompt_id": output["metadata"]["prompt_id"],
                     "evaluator_id": evaluator_id,
-                    "is_human": 1 if is_human else 0,
+                    "is_human": "1" if is_human else "0",
                     "timestamp": datetime.now().isoformat()
                 }
             )
             
             # Add the record to the dataset
-            self.datasets["evaluations"].add_records([record])
+            self.datasets["evaluations"].records.log([record])
             
             logger.info(f"Stored evaluation for output ID: {output_id}")
             return True
@@ -329,6 +334,12 @@ class ArgillaDatabase:
             # Create a unique ID for this prompt
             prompt_id = str(uuid.uuid4())
             
+            # Create responses
+            responses = [
+                rg.Response(question_name="average_score", value=0.0, user_id=self.user_id),
+                rg.Response(question_name="survived", value=False, user_id=self.user_id)
+            ]
+            
             # Create a record
             record = rg.Record(
                 fields={
@@ -336,20 +347,17 @@ class ArgillaDatabase:
                     "model": model,
                     "purpose": purpose
                 },
-                responses=[
-                    rg.Response(question_name="average_score", value=0.0, user_id=self.user_id),  # Initial score
-                    rg.Response(question_name="survived", value=False, user_id=self.user_id)  # Initial survival status
-                ],
+                responses=responses,
                 metadata={
                     "prompt_id": prompt_id,
                     "parent_prompt_id": parent_prompt_id or "root",
-                    "generation": generation,
+                    "generation": str(generation),
                     "timestamp": datetime.now().isoformat()
                 }
             )
             
             # Add the record to the dataset
-            self.datasets["prompts"].add_records([record])
+            self.datasets["prompts"].records.log([record])
             
             logger.info(f"Stored prompt with ID: {prompt_id}")
             return prompt_id
@@ -385,18 +393,21 @@ class ArgillaDatabase:
                 logger.error(f"Prompt with ID {prompt_id} not found")
                 return False
             
+            # Create responses for update
+            responses = [
+                rg.Response(question_name="average_score", value=avg_score, user_id=self.user_id),
+                rg.Response(question_name="survived", value=survived, user_id=self.user_id)
+            ]
+            
             # Update the record
             record = records[0]
             updated_record = rg.Record(
                 id=record["id"],
-                responses=[
-                    rg.Response(question_name="average_score", value=avg_score, user_id=self.user_id),
-                    rg.Response(question_name="survived", value=survived, user_id=self.user_id)
-                ]
+                responses=responses
             )
             
             # Add the updated record to the dataset
-            self.datasets["prompts"].add_records([updated_record])
+            self.datasets["prompts"].records.log([updated_record])
             
             logger.info(f"Updated performance for prompt ID: {prompt_id}")
             return True
@@ -429,7 +440,7 @@ class ArgillaDatabase:
                     return None
             
             # Query for outputs from the current round
-            round_filter = rg.Filter(("metadata.round", "==", round_num))
+            round_filter = rg.Filter(("metadata.round", "==", str(round_num)))
             query = rg.Query(filter=round_filter)
             outputs = self.datasets["outputs"].records(query=query).to_list(flatten=True)
             
@@ -510,10 +521,18 @@ class ArgillaDatabase:
             # Process prompts
             for prompt in all_prompts:
                 prompt_id = prompt["metadata"]["prompt_id"]
-                generation = prompt["metadata"]["generation"]
+                generation = int(prompt["metadata"]["generation"])
                 parent_id = prompt["metadata"]["parent_prompt_id"]
-                avg_score = prompt["responses"]["average_score"] if "responses" in prompt and "average_score" in prompt["responses"] else 0
-                survived = prompt["responses"]["survived"] if "responses" in prompt and "survived" in prompt["responses"] else False
+                
+                # Extract responses
+                avg_score = 0
+                survived = False
+                if "responses" in prompt:
+                    for response in prompt["responses"]:
+                        if response["question"]["name"] == "average_score":
+                            avg_score = float(response["value"])
+                        elif response["question"]["name"] == "survived":
+                            survived = bool(response["value"])
                 
                 # Track prompt metrics
                 metrics["prompts"].append({
@@ -537,7 +556,7 @@ class ArgillaDatabase:
             # Process outputs and evaluations
             for output in all_records:
                 output_id = output["metadata"]["output_id"]
-                round_num = output["metadata"]["round"]
+                round_num = int(output["metadata"]["round"])
                 prompt_id = output["metadata"]["prompt_id"]
                 
                 # Find evaluations for this output
@@ -545,7 +564,14 @@ class ArgillaDatabase:
                 if output_evaluations:
                     # Use the latest evaluation
                     latest_eval = max(output_evaluations, key=lambda e: e["metadata"]["timestamp"])
-                    score = latest_eval["responses"]["score"] if "responses" in latest_eval and "score" in latest_eval["responses"] else 0
+                    
+                    # Extract score from responses
+                    score = 0
+                    if "responses" in latest_eval:
+                        for response in latest_eval["responses"]:
+                            if response["question"]["name"] == "score":
+                                score = int(response["value"])
+                                break
                     
                     metrics["rounds"].append(round_num)
                     metrics["scores"].append(score)
@@ -582,15 +608,25 @@ class ArgillaDatabase:
             
             rows = []
             for prompt in all_prompts:
+                # Extract responses
+                avg_score = 0
+                survived = False
+                if "responses" in prompt:
+                    for response in prompt["responses"]:
+                        if response["question"]["name"] == "average_score":
+                            avg_score = float(response["value"])
+                        elif response["question"]["name"] == "survived":
+                            survived = bool(response["value"])
+                
                 row = {
                     "prompt_id": prompt["metadata"]["prompt_id"],
-                    "generation": prompt["metadata"]["generation"],
-                    "parent_id": prompt["metadata"]["parent_id"] if "parent_id" in prompt["metadata"] else "root",
+                    "generation": int(prompt["metadata"]["generation"]),
+                    "parent_id": prompt["metadata"].get("parent_prompt_id", "root"),
                     "prompt_text": prompt["fields"]["prompt_text"],
                     "model": prompt["fields"]["model"],
                     "purpose": prompt["fields"]["purpose"],
-                    "avg_score": prompt["responses"]["average_score"] if "responses" in prompt and "average_score" in prompt["responses"] else 0,
-                    "survived": prompt["responses"]["survived"] if "responses" in prompt and "survived" in prompt["responses"] else False,
+                    "avg_score": avg_score,
+                    "survived": survived,
                     "timestamp": prompt["metadata"]["timestamp"]
                 }
                 rows.append(row)
@@ -632,7 +668,15 @@ class ArgillaDatabase:
             prompt_scores = []
             for prompt in all_prompts:
                 prompt_id = prompt["metadata"]["prompt_id"]
-                avg_score = prompt["responses"]["average_score"] if "responses" in prompt and "average_score" in prompt["responses"] else 0
+                
+                # Extract avg_score from responses
+                avg_score = 0
+                if "responses" in prompt:
+                    for response in prompt["responses"]:
+                        if response["question"]["name"] == "average_score":
+                            avg_score = float(response["value"])
+                            break
+                
                 prompt_scores.append((prompt_id, avg_score))
             
             # Sort by score (descending) and take top N
@@ -722,12 +766,21 @@ class ArgillaDatabase:
             
             latest = records[0]
             
-            # Extract the relevant fields
+            # Extract the relevant fields from responses
             evaluation = {
-                "score": latest["responses"]["score"] if "responses" in latest and "score" in latest["responses"] else 0,
-                "feedback": latest["responses"]["feedback"] if "responses" in latest and "feedback" in latest["responses"] else "",
-                "improved_output": latest["responses"]["improved_output"] if "responses" in latest and "improved_output" in latest["responses"] else ""
+                "score": 0,
+                "feedback": "",
+                "improved_output": ""
             }
+            
+            if "responses" in latest:
+                for response in latest["responses"]:
+                    if response["question"]["name"] == "score":
+                        evaluation["score"] = int(response["value"])
+                    elif response["question"]["name"] == "feedback":
+                        evaluation["feedback"] = response["value"]
+                    elif response["question"]["name"] == "improved_output":
+                        evaluation["improved_output"] = response["value"]
             
             return evaluation
             
