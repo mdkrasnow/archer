@@ -43,10 +43,11 @@ class ArgillaDatabase:
         try:
             logger.info(f"Connecting to Argilla at {self.api_url}")
             self.client = rg.Argilla(api_url=self.api_url, api_key=self.api_key)
+            
             # Test connection by getting current user
-            user_info = self.client.me()  # Call the me() method
-            self.user_id = user_info.get("id", "default_user")
-            logger.info("Successfully connected to Argilla")
+            user_info = self.client.me()
+            self.user_id = getattr(user_info, 'id', self.user_id)
+            logger.info(f"Successfully connected to Argilla as user: {self.user_id}")
             return True
         except Exception as e:
             logger.error(f"Error connecting to Argilla: {str(e)}")
@@ -70,7 +71,7 @@ class ArgillaDatabase:
             try:
                 # First check if dataset exists by trying to fetch it
                 try:
-                    outputs_dataset = rg.Dataset.from_argilla("archer_outputs")
+                    outputs_dataset = self.client.datasets("archer_outputs")
                     self.datasets["outputs"] = outputs_dataset
                     logger.info("Found existing outputs dataset")
                 except Exception as e:
@@ -101,8 +102,10 @@ class ArgillaDatabase:
                             rg.TermsMetadataProperty(name="output_id", title="Output ID")
                         ]
                     )
-                    self.datasets["outputs"] = rg.Dataset(name="archer_outputs", settings=outputs_settings)
-                    self.datasets["outputs"].create()
+                    new_dataset = rg.Dataset(name="archer_outputs", settings=outputs_settings)
+                    new_dataset.create()
+                    self.datasets["outputs"] = self.client.datasets("archer_outputs")
+                    logger.info("Created new outputs dataset")
             except Exception as e:
                 logger.error(f"Error with outputs dataset: {str(e)}")
                 return False
@@ -111,7 +114,7 @@ class ArgillaDatabase:
             try:
                 # First check if dataset exists by trying to fetch it
                 try:
-                    prompts_dataset = rg.Dataset.from_argilla("archer_prompts")
+                    prompts_dataset = self.client.datasets("archer_prompts")
                     self.datasets["prompts"] = prompts_dataset
                     logger.info("Found existing prompts dataset")
                 except Exception as e:
@@ -141,8 +144,10 @@ class ArgillaDatabase:
                             rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
                         ]
                     )
-                    self.datasets["prompts"] = rg.Dataset(name="archer_prompts", settings=prompts_settings)
-                    self.datasets["prompts"].create()
+                    new_dataset = rg.Dataset(name="archer_prompts", settings=prompts_settings)
+                    new_dataset.create()
+                    self.datasets["prompts"] = self.client.datasets("archer_prompts")
+                    logger.info("Created new prompts dataset")
             except Exception as e:
                 logger.error(f"Error with prompts dataset: {str(e)}")
                 return False
@@ -151,7 +156,7 @@ class ArgillaDatabase:
             try:
                 # First check if dataset exists by trying to fetch it
                 try:
-                    evaluations_dataset = rg.Dataset.from_argilla("archer_evaluations")
+                    evaluations_dataset = self.client.datasets("archer_evaluations")
                     self.datasets["evaluations"] = evaluations_dataset
                     logger.info("Found existing evaluations dataset")
                 except Exception as e:
@@ -184,8 +189,10 @@ class ArgillaDatabase:
                             rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
                         ]
                     )
-                    self.datasets["evaluations"] = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
-                    self.datasets["evaluations"].create()
+                    new_dataset = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
+                    new_dataset.create()
+                    self.datasets["evaluations"] = self.client.datasets("archer_evaluations")
+                    logger.info("Created new evaluations dataset")
             except Exception as e:
                 logger.error(f"Error with evaluations dataset: {str(e)}")
                 return False
@@ -223,7 +230,7 @@ class ArgillaDatabase:
             # Get the prompt text for reference, but continue even if not found
             prompt_text = self._get_prompt_text(prompt_id) or "Unknown prompt"
             
-            # Create a record
+            # Create a record with properly structured data
             record = rg.Record(
                 fields={
                     "input": input_data,
@@ -238,11 +245,26 @@ class ArgillaDatabase:
                 }
             )
             
-            # Add the record to the dataset
-            self.datasets["outputs"].records.log([record])
-            
-            logger.info(f"Stored generated content with ID: {output_id}")
-            return output_id
+            # Ensure the dataset reference is valid and log the record
+            try:
+                dataset = self.datasets["outputs"]
+                dataset.records.log([record])
+                logger.info(f"Stored generated content with ID: {output_id}")
+                return output_id
+            except Exception as e:
+                logger.error(f"Error logging record to dataset: {str(e)}")
+                
+                # Try to reinitialize and retry if the initial attempt failed
+                logger.info("Attempting to reconnect and retry...")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["outputs"].records.log([record])
+                        logger.info(f"Successfully stored content after retry with ID: {output_id}")
+                        return output_id
+                    except Exception as retry_error:
+                        logger.error(f"Retry failed: {str(retry_error)}")
+                
+                return None
             
         except Exception as e:
             logger.error(f"Error storing generated content: {str(e)}")
@@ -719,16 +741,39 @@ class ArgillaDatabase:
             Dict: Output record, or None if not found
         """
         try:
-            # Query for the output
+            if "outputs" not in self.datasets:
+                logger.info("Outputs dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    return None
+                    
+            # Query for the output using Filter
             output_filter = rg.Filter(("metadata.output_id", "==", output_id))
             query = rg.Query(filter=output_filter)
-            records = self.datasets["outputs"].records(query=query).to_list(flatten=True)
             
-            if not records:
-                return None
+            try:
+                records_iterator = self.datasets["outputs"].records(query=query)
+                records_list = records_iterator.to_list(flatten=True)
                 
-            # Return the first matching record
-            return records[0]
+                if not records_list:
+                    logger.warning(f"No output found with ID: {output_id}")
+                    return None
+                    
+                # Return the first matching record
+                return records_list[0]
+            except Exception as query_error:
+                logger.error(f"Error querying for output: {str(query_error)}")
+                
+                # Try to reconnect and retry
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        records_iterator = self.datasets["outputs"].records(query=query)
+                        records_list = records_iterator.to_list(flatten=True)
+                        return records_list[0] if records_list else None
+                    except Exception as retry_error:
+                        logger.error(f"Retry query failed: {str(retry_error)}")
+                
+                return None
             
         except Exception as e:
             logger.error(f"Error getting output: {str(e)}")
@@ -752,16 +797,30 @@ class ArgillaDatabase:
                 if not success:
                     return None
 
-            # Query for the prompt
+            # Query for the prompt using the Filter API
             prompt_filter = rg.Filter(("metadata.prompt_id", "==", prompt_id))
             query = rg.Query(filter=prompt_filter)
-            records = self.datasets["prompts"].records(query=query).to_list(flatten=True)
             
-            if not records:
-                return None
+            try:
+                records_iterator = self.datasets["prompts"].records(query=query)
+                records_list = records_iterator.to_list(flatten=True)
                 
-            # Return the prompt text
-            return records[0]["fields"]["prompt_text"]
+                if not records_list:
+                    logger.warning(f"No prompt found with ID: {prompt_id}")
+                    return None
+                    
+                # Return the prompt text - handle possible data structure differences
+                record = records_list[0]
+                if "fields" in record and "prompt_text" in record["fields"]:
+                    return record["fields"]["prompt_text"]
+                elif hasattr(record, 'fields') and hasattr(record.fields, 'prompt_text'):
+                    return record.fields.prompt_text
+                else:
+                    logger.warning(f"Prompt found but could not extract text, record structure: {record}")
+                    return None
+            except Exception as query_error:
+                logger.error(f"Error querying for prompt: {str(query_error)}")
+                return None
             
         except Exception as e:
             logger.error(f"Error getting prompt text: {str(e)}")
@@ -778,36 +837,62 @@ class ArgillaDatabase:
             Dict: Evaluation record, or None if not found
         """
         try:
+            if "evaluations" not in self.datasets:
+                logger.info("Evaluations dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    return None
+                    
             # Query for evaluations of this output
             output_filter = rg.Filter(("metadata.output_id", "==", output_id))
             query = rg.Query(filter=output_filter)
-            records = self.datasets["evaluations"].records(query=query).to_list(flatten=True)
             
-            if not records:
-                return None
+            try:
+                records_iterator = self.datasets["evaluations"].records(query=query)
+                records_list = records_iterator.to_list(flatten=True)
                 
-            # Sort by timestamp (descending) and return the first (latest)
-            records.sort(key=lambda x: x["metadata"]["timestamp"], reverse=True)
-            
-            latest = records[0]
-            
-            # Extract the relevant fields from responses
-            evaluation = {
-                "score": 0,
-                "feedback": "",
-                "improved_output": ""
-            }
-            
-            if "responses" in latest:
-                for response in latest["responses"]:
-                    if response["question"]["name"] == "score":
-                        evaluation["score"] = int(response["value"])
-                    elif response["question"]["name"] == "feedback":
-                        evaluation["feedback"] = response["value"]
-                    elif response["question"]["name"] == "improved_output":
-                        evaluation["improved_output"] = response["value"]
-            
-            return evaluation
+                if not records_list:
+                    logger.debug(f"No evaluations found for output ID: {output_id}")
+                    return None
+                    
+                # Sort by timestamp (descending) and return the first (latest)
+                records_list.sort(key=lambda x: x["metadata"]["timestamp"] if isinstance(x, dict) and "metadata" in x else 
+                                   (x.metadata.timestamp if hasattr(x, 'metadata') and hasattr(x.metadata, 'timestamp') else ""), 
+                                   reverse=True)
+                
+                latest = records_list[0]
+                
+                # Extract the relevant fields from responses
+                evaluation = {
+                    "score": 0,
+                    "feedback": "",
+                    "improved_output": ""
+                }
+                
+                # Handle both dict and object access patterns for records
+                if isinstance(latest, dict) and "responses" in latest:
+                    for response in latest["responses"]:
+                        if response["question"]["name"] == "score":
+                            evaluation["score"] = int(response["value"])
+                        elif response["question"]["name"] == "feedback":
+                            evaluation["feedback"] = response["value"]
+                        elif response["question"]["name"] == "improved_output":
+                            evaluation["improved_output"] = response["value"]
+                elif hasattr(latest, 'responses'):
+                    for response in latest.responses:
+                        if hasattr(response, 'question') and hasattr(response.question, 'name'):
+                            if response.question.name == "score":
+                                evaluation["score"] = int(response.value)
+                            elif response.question.name == "feedback":
+                                evaluation["feedback"] = response.value
+                            elif response.question.name == "improved_output":
+                                evaluation["improved_output"] = response.value
+                
+                return evaluation
+                
+            except Exception as query_error:
+                logger.error(f"Error querying for evaluations: {str(query_error)}")
+                return None
             
         except Exception as e:
             logger.error(f"Error getting latest evaluation: {str(e)}")
