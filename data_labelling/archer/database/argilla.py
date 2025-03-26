@@ -90,11 +90,11 @@ class ArgillaDatabase:
                             description="Provide feedback on how to improve the output"
                         )
                     ],
-                    metadata_properties=[
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.IntegerMetadataProperty(name="round", title="Round Number"),
-                        rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
-                    ]
+                    # metadata_properties=[
+                    #     rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                    #     rg.IntegerMetadataProperty(name="round", title="Round Number"),
+                    #     rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
+                    # ]
                 )
                 self.datasets["outputs"] = rg.Dataset(name="archer_outputs", settings=outputs_settings)
                 self.datasets["outputs"].create()
@@ -123,12 +123,12 @@ class ArgillaDatabase:
                             description="Whether this prompt survived to the next generation"
                         )
                     ],
-                    metadata_properties=[
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
-                        rg.IntegerMetadataProperty(name="generation", title="Generation Number"),
-                        rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
-                    ]
+                    # metadata_properties=[
+                    #     rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                    #     rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
+                    #     rg.IntegerMetadataProperty(name="generation", title="Generation Number"),
+                    #     rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
+                    # ]
                 )
                 self.datasets["prompts"] = rg.Dataset(name="archer_prompts", settings=prompts_settings)
                 self.datasets["prompts"].create()
@@ -159,13 +159,13 @@ class ArgillaDatabase:
                         ),
                         rg.TextField(name="improved_output", title="Improved Output")
                     ],
-                    metadata_properties=[
-                        rg.TermsMetadataProperty(name="output_id", title="Output ID"),
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="evaluator_id", title="Evaluator ID"),
-                        rg.IntegerMetadataProperty(name="is_human", title="Is Human Evaluation"),
-                        rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
-                    ]
+                    # metadata_properties=[
+                    #     rg.TermsMetadataProperty(name="output_id", title="Output ID"),
+                    #     rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                    #     rg.TermsMetadataProperty(name="evaluator_id", title="Evaluator ID"),
+                    #     rg.IntegerMetadataProperty(name="is_human", title="Is Human Evaluation"),
+                    #     rg.DatetimeMetadataProperty(name="timestamp", title="Timestamp")
+                    # ]
                 )
                 self.datasets["evaluations"] = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
                 self.datasets["evaluations"].create()
