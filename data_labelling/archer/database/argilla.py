@@ -349,10 +349,19 @@ class ArgillaDatabase:
             # Handle the output structure - extract fields and metadata safely
             try:
                 # Safely extract fields data
-                if isinstance(output, dict) and 'fields' in output:
-                    input_data = output["fields"].get("input", "")
-                    generated_content = output["fields"].get("generated_content", "")
-                    prompt_id = output["metadata"].get("prompt_id", "unknown") if "metadata" in output else "unknown"
+                if isinstance(output, dict):
+                    if 'fields' in output:
+                        input_data = output["fields"].get("input", "")
+                        generated_content = output["fields"].get("generated_content", "")
+                        prompt_id = output["metadata"].get("prompt_id", "unknown") if "metadata" in output else "unknown"
+                    elif "input" in output and "generated_content" in output and "metadata" in output:
+                        # Alternative structure: keys are at the top level
+                        input_data = output.get("input", "")
+                        generated_content = output.get("generated_content", "")
+                        prompt_id = output["metadata"].get("prompt_id", "unknown")
+                    else:
+                        logger.error(f"Output found but has unexpected dictionary structure: {list(output.keys())}")
+                        return False
                 elif hasattr(output, 'fields'):
                     input_data = getattr(getattr(output, 'fields', object()), 'input', "")
                     generated_content = getattr(getattr(output, 'fields', object()), 'generated_content', "")
