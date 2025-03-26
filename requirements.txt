@@ -1,0 +1,13 @@
+matplotlib
+numpy
+pandas
+gradio>=5.5.0
+argilla==2.8.0
+adalflow
+google-genai==1.0.0
+google-generativeai
+python-dotenv
+pytest
+uuid
+pathlib
+requests
