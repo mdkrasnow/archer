@@ -364,7 +364,26 @@ class GradioApp:
         # Create interface
         with gr.Blocks(theme=gr.themes.Soft()) as app:
             gr.Markdown("# Archer: Human Validation Interface")
-            gr.Markdown("Review and edit AI-generated evaluations in the table below.")
+            
+            with gr.Accordion("Help & Instructions", open=False):
+                gr.Markdown("""
+                ## Usage Instructions
+                
+                This interface allows you to review and edit AI-generated evaluations.
+                
+                ### Data Annotation Tab
+                - Review the generated content
+                - Modify scores (1-5) based on quality
+                - Provide feedback in the feedback column
+                - Create perfect outputs where needed
+                - Save your changes frequently
+                
+                ### Performance Tracking Tab
+                - View visualizations of system performance
+                - Check prompt performance across generations
+                - Monitor model improvement over time
+                - Track prompt maintenance and survivorship
+                """)
             
             # Store state
             current_df = gr.State(initial_data)
@@ -376,54 +395,56 @@ class GradioApp:
                     # Round number display
                     round_display = gr.Markdown(f"## Current Round: {self.current_round}")
                     
-                    # Create the editable dataframe component
-                    visible_cols = ["input", "eval_content", "eval_score", "eval_feedback", "eval_perfect_output"]
-                    all_cols = ["output_id", "input", "eval_content", "eval_score", "eval_feedback", "eval_perfect_output", "prompt_id"]
-                    
-                    # Extract the data to display
-                    display_data = initial_data[visible_cols] if not initial_data.empty else pd.DataFrame(columns=visible_cols)
-                    
-                    dataframe = gr.Dataframe(
-                        value=display_data,
-                        headers=visible_cols,
-                        datatype=["str", "str", "number", "str", "str"],
-                        col_count=(len(visible_cols), "fixed"),
-                        interactive=[False, True, True, True, True],  # First column (input) is not editable
-                        wrap=True,
-                        height=500,
-                        max_rows=20
-                    )
+                    with gr.Accordion("Annotation Data", open=True):
+                        gr.Markdown("Edit AI-generated evaluations in the table below. You can modify scores, feedback, and perfect outputs.")
+                        
+                        # Create the editable dataframe component
+                        visible_cols = ["input", "eval_content", "eval_score", "eval_feedback", "eval_perfect_output"]
+                        all_cols = ["output_id", "input", "eval_content", "eval_score", "eval_feedback", "eval_perfect_output", "prompt_id"]
+                        
+                        # Extract the data to display
+                        display_data = initial_data[visible_cols] if not initial_data.empty else pd.DataFrame(columns=visible_cols)
+                        
+                        dataframe = gr.Dataframe(
+                            value=display_data,
+                            headers=visible_cols,
+                            datatype=["str", "str", "number", "str", "str"],
+                            col_count=(len(visible_cols), "fixed"),
+                            interactive=[False, True, True, True, True],  # First column (input) is not editable
+                            wrap=True,
+                            max_rows=20
+                        )
                     
                     # Status message for saves
                     status_msg = gr.Textbox(label="Status", value="Ready", interactive=False)
                     
-                    # Buttons row
-                    with gr.Row():
-                        # Save button
-                        save_btn = gr.Button("Save Current Data")
-                        
-                        # Refresh button to trigger the backward pass
-                        refresh_btn = gr.Button("REFRESH (Save & Get New Data)", variant="primary")
+                    # Buttons in an Accordion
+                    with gr.Accordion("Actions", open=True):
+                        # Buttons row
+                        with gr.Row():
+                            # Save button
+                            save_btn = gr.Button("Save Current Data")
+                            
+                            # Refresh button to trigger the backward pass
+                            refresh_btn = gr.Button("REFRESH (Save & Get New Data)", variant="primary")
                 
                 # Tab 2: Performance Tracking
                 with gr.TabItem("Performance Tracking"):
                     # Button for updating visualizations
                     update_viz_btn = gr.Button("Update Visualizations")
                     
-                    # Create placeholders for visualization components
-                    with gr.Row():
-                        with gr.Column():
-                            gr.Markdown("### Prompt Performance Across Generations")
-                            prompt_perf_plot = gr.Plot()
+                    # Create placeholders for visualization components with Accordions
+                    with gr.Accordion("Prompt Performance", open=True):
+                        gr.Markdown("### Prompt Performance Across Generations")
+                        prompt_perf_plot = gr.Plot()
                     
-                    with gr.Row():
-                        with gr.Column():
-                            gr.Markdown("### Model Improvement Over Time")
-                            model_improve_plot = gr.Plot()
-                        
-                        with gr.Column():
-                            gr.Markdown("### Prompt Maintenance Tracking")
-                            prompt_maintain_plot = gr.Plot()
+                    with gr.Accordion("Model Performance", open=True):
+                        gr.Markdown("### Model Improvement Over Time")
+                        model_improve_plot = gr.Plot()
+                    
+                    with gr.Accordion("Prompt Maintenance", open=False):
+                        gr.Markdown("### Prompt Maintenance Tracking")
+                        prompt_maintain_plot = gr.Plot()
             
             # Define event handlers
             
