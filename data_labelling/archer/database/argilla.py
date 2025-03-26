@@ -354,11 +354,15 @@ class ArgillaDatabase:
                         input_data = output["fields"].get("input", "")
                         generated_content = output["fields"].get("generated_content", "")
                         prompt_id = output["metadata"].get("prompt_id", "unknown") if "metadata" in output else "unknown"
-                    elif "input" in output and "generated_content" in output and "metadata" in output:
+                    elif "input" in output and "generated_content" in output:
                         # Alternative structure: keys are at the top level
                         input_data = output.get("input", "")
                         generated_content = output.get("generated_content", "")
-                        prompt_id = output["metadata"].get("prompt_id", "unknown")
+                        # Check if metadata is a nested structure or at top level
+                        if "metadata" in output and isinstance(output["metadata"], dict):
+                            prompt_id = output["metadata"].get("prompt_id", "unknown")
+                        else:
+                            prompt_id = output.get("prompt_id", "unknown")
                     else:
                         logger.error(f"Output found but has unexpected dictionary structure: {list(output.keys())}")
                         return False
