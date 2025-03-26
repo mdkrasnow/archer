@@ -4,7 +4,7 @@ emoji: 🏹
 colorFrom: blue
 colorTo: indigo
 sdk: gradio
-sdk_version: "3.50.2"
+sdk_version: 5.23.1
 app_file: data_labelling/app.py
 pinned: true
 ---
