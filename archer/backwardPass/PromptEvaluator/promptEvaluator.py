@@ -4,6 +4,10 @@ from typing import List, Tuple, Any, Dict, Union, Optional
 from helpers.prompt import Prompt
 from forwardPass.evaluator import AIExpert
 from forwardPass.generator import GenerativeModel
+from ...helpers.logging_utils import get_logger, log_entry_exit, log_call_args
+
+# Setup logger for this module
+logger = get_logger(__name__)
 
 class PromptEvaluator:
     """
@@ -28,11 +32,14 @@ class PromptEvaluator:
             num_simulations: Number of simulation runs per prompt (default: 3).
             quantile_threshold: Fraction of top-performing prompts to select (default: 0.25).
         """
+        logger.info("Initializing PromptEvaluator")
         self.generative_model = generative_model
         self.evaluator = evaluator
         self.num_simulations = num_simulations
         self.quantile_threshold = quantile_threshold
+        logger.info(f"PromptEvaluator initialized with {num_simulations} simulations and {quantile_threshold} quantile threshold")
 
+    @log_entry_exit(logger)
     def evaluate_prompts(self, prompts: List[Prompt], input_data: Any, 
                         num_simulations: Optional[int] = None) -> List[Tuple[Prompt, float, List[Dict[str, Any]]]]:
         """
@@ -56,39 +63,62 @@ class PromptEvaluator:
                 - The average score (float) from the simulations.
                 - A list of detailed evaluation result dictionaries from each simulation run.
         """
+        logger.info(f"Evaluating {len(prompts)} prompts")
+        
         results = []
         simulations = num_simulations if num_simulations is not None else self.num_simulations
+        logger.info(f"Running {simulations} simulations per prompt")
         
         # Handle input_data as either a single item or a list of items
         inputs = input_data if isinstance(input_data, list) else [input_data]
+        logger.debug(f"Using {len(inputs)} input items for evaluation")
         
-        for prompt in prompts:
+        for i, prompt in enumerate(prompts):
+            logger.info(f"Evaluating prompt {i+1}/{len(prompts)}: {prompt.content[:50]}...")
+            
             simulation_results = []
             scores = []
             # Set the active prompt to just this one to isolate its simulation.
+            logger.debug(f"Setting generator to use only the current prompt")
             self.generative_model.set_prompts([prompt])
             
             # Distribute the simulations across the available inputs
-            for i in range(simulations):
+            for j in range(simulations):
                 # Cycle through the inputs if we have more simulations than inputs
-                current_input = inputs[i % len(inputs)]
+                current_input = inputs[j % len(inputs)]
+                logger.debug(f"Running simulation {j+1}/{simulations} with input #{j % len(inputs) + 1}")
                 
                 # Generate content; since only one prompt is active, we expect one output.
                 outputs = self.generative_model.generate(current_input)
                 if outputs:
                     generated_content, used_prompt = outputs[0]
+                    logger.debug(f"Generated content length: {len(generated_content)} chars")
+                    
                     # Evaluate the generated content using the frozen AI expert evaluator.
+                    logger.debug(f"Evaluating generated content")
                     evaluation = self.evaluator.evaluate(generated_content, current_input)
                     score = evaluation.get('score', 0)
+                    logger.debug(f"Evaluation score: {score}")
+                    
                     scores.append(score)
                     simulation_results.append(evaluation)
+                else:
+                    logger.warning(f"No output generated for prompt in simulation {j+1}")
             
             # Compute the average score for the prompt.
-            avg_score = sum(scores) / len(scores) if scores else 0
+            if scores:
+                avg_score = sum(scores) / len(scores)
+                logger.info(f"Prompt average score: {avg_score} from {len(scores)} simulations")
+            else:
+                avg_score = 0
+                logger.warning(f"No scores collected for prompt, using default score of 0")
+                
             results.append((prompt, avg_score, simulation_results))
         
+        logger.info(f"Prompt evaluation complete, evaluated {len(results)} prompts")
         return results
     
+    @log_entry_exit(logger)
     def select_best_prompts(self, prompt_results: List[Tuple[Prompt, float, List[Dict[str, Any]]]],
                            quantile: Optional[float] = None) -> List[Tuple[Prompt, float, List[Dict[str, Any]]]]:
         """
@@ -102,20 +132,32 @@ class PromptEvaluator:
         Returns:
             List of (prompt, score, details) tuples for the best prompts.
         """
+        logger.info(f"Selecting best prompts from {len(prompt_results)} candidates")
+        
         if not prompt_results:
+            logger.warning("No prompt results to select from, returning empty list")
             return []
             
         threshold = quantile if quantile is not None else self.quantile_threshold
+        logger.info(f"Using quantile threshold: {threshold}")
         
         # Sort by score in descending order
         sorted_results = sorted(prompt_results, key=lambda x: x[1], reverse=True)
         
         # Calculate how many prompts to keep, at least 1
         keep_count = max(1, int(len(sorted_results) * threshold))
+        logger.info(f"Keeping top {keep_count} prompts")
         
         # Return the top performers
-        return sorted_results[:keep_count]
+        best_prompts = sorted_results[:keep_count]
+        
+        # Log the scores of selected prompts
+        for i, (prompt, score, _) in enumerate(best_prompts):
+            logger.debug(f"Selected prompt #{i+1} with score {score}: {prompt.content[:50]}...")
+            
+        return best_prompts
     
+    @log_entry_exit(logger)
     def evaluate_and_select_best(self, prompts: List[Prompt], input_data: Any,
                                quantile: Optional[float] = None,
                                num_simulations: Optional[int] = None) -> List[Prompt]:
@@ -131,7 +173,10 @@ class PromptEvaluator:
         Returns:
             List of the best performing Prompt objects.
         """
+        logger.info(f"Evaluating and selecting best prompts from {len(prompts)} candidates")
+        
         # Evaluate all prompts
+        logger.info("Starting prompt evaluation")
         evaluation_results = self.evaluate_prompts(
             prompts=prompts,
             input_data=input_data,
@@ -139,10 +184,13 @@ class PromptEvaluator:
         )
         
         # Select the best ones
+        logger.info("Selecting best prompts from evaluation results")
         best_prompts = self.select_best_prompts(
             prompt_results=evaluation_results,
             quantile=quantile
         )
         
         # Return just the Prompt objects (first element of each tuple)
-        return [result[0] for result in best_prompts]
+        result_prompts = [result[0] for result in best_prompts]
+        logger.info(f"Returning {len(result_prompts)} best prompts")
+        return result_prompts
