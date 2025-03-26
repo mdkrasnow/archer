@@ -15,7 +15,7 @@ class AIExpert:
         Initialize a new AIExpert.
         
         Args:
-            model_name: Identifier of the LLM to use (e.g., "claude-3")
+            model_name: Identifier of the LLM to use (e.g., "gemini-2.0-flash")
             knowledge_base: List of documents containing expert knowledge
             rubric: Dictionary defining evaluation criteria and their weights
         """

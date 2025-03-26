@@ -88,8 +88,8 @@ knowledge_base_dirs = ["./knowledge/domain1", "./knowledge/domain2"]
 # Initialize Archer
 archer = Archer(
     generator_model_name="gemini-2.0-flash",              # Model for content generation
-    evaluator_model_name="claude-3-opus",      # Model for evaluation
-    optimizer_model_name="claude-3-sonnet",    # Model for prompt optimization
+    evaluator_model_name="gemini-2.0-flash",      # Model for evaluation
+    optimizer_model_name="gemini-2.0-flash",    # Model for prompt optimization
     knowledge_base=knowledge_base_dirs,        # List of directory paths
     rubric=rubric,                             # Evaluation criteria
     initial_prompts=initial_prompts,           # Starting prompts
@@ -199,8 +199,8 @@ content_prompts = [
 # Initialize Archer for content generation
 content_archer = Archer(
     generator_model_name="gemini-2.0-flash",
-    evaluator_model_name="claude-3-opus",
-    optimizer_model_name="claude-3-sonnet",
+    evaluator_model_name="gemini-2.0-flash",
+    optimizer_model_name="gemini-2.0-flash",
     knowledge_base=["./knowledge/writing", "./knowledge/blogging"],
     rubric=content_rubric,
     initial_prompts=content_prompts,

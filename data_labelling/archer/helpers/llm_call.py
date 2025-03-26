@@ -4,11 +4,11 @@ This module provides the llm_call function for making API calls to language mode
 import os
 import json
 from typing import Dict, List, Optional, Any
-from openai import OpenAI
+import google.generativeai as genai
 
 def llm_call(
     messages: List[Dict[str, str]],
-    model: str = "google/gemini-2.0-flash",
+    model: str = "gemini-2.0-flash",
     openrouter_api_key: str = None,
     site_url: Optional[str] = None,
     site_name: Optional[str] = None,
@@ -19,14 +19,14 @@ def llm_call(
     tools: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
-    Make an API call to a language model through OpenRouter using the OpenAI SDK.
+    Make an API call to a language model using Google's Gemini API.
     
     Args:
         messages (list): List of message objects with 'role' and 'content' keys.
-        openrouter_api_key (str, optional): API key for OpenRouter.
         model (str, optional): Model identifier string.
-        site_url (str, optional): URL of the site making the request.
-        site_name (str, optional): Name of the site making the request.
+        openrouter_api_key (str, optional): Kept for backward compatibility, not used.
+        site_url (str, optional): Kept for backward compatibility, not used.
+        site_name (str, optional): Kept for backward compatibility, not used.
         temperature (float, optional): Temperature parameter for generation.
         max_tokens (int, optional): Maximum tokens to generate.
         response_format (dict, optional): Format specification for the response.
@@ -34,15 +34,14 @@ def llm_call(
         stream (bool, optional): Whether to stream the response.
         
     Returns:
-        dict or response object: If stream=False, returns the parsed JSON response.
-                                 If stream=True, returns the response object.
+        dict: The model response in a standardized format.
         
     Raises:
         ValueError: If API key is missing and not in test mode.
         Exception: If the API call fails.
     """
-    # Get API key from parameter or environment variable
-    api_key = openrouter_api_key or os.getenv("OPENROUTER_API_KEY")
+    # Get API key from environment variable
+    api_key = os.getenv("GOOGLE_API_KEY")
     
     # Special handling for test environment
     if api_key == "test_api_key":
@@ -59,49 +58,67 @@ def llm_call(
         }
     
     if not api_key:
-        raise ValueError("OpenRouter API key is required")
+        raise ValueError("Google API key is required")
     
-    # Initialize the OpenAI client with OpenRouter base URL
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
+    # Configure the Gemini API
+    genai.configure(api_key=api_key)
+    
+    # Create a generation config
+    generation_config = genai.GenerationConfig(
+        temperature=temperature,
     )
     
-    # Set up extra headers for site info if provided
-    extra_headers = {}
-    if site_url:
-        extra_headers["HTTP-Referer"] = site_url
-    if site_name:
-        extra_headers["X-Title"] = site_name
-    
-    # Prepare the arguments for the API call
-    completion_args = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-    }
-    
-    # Add optional parameters if provided
+    # Add max tokens if provided
     if max_tokens is not None:
-        completion_args["max_tokens"] = max_tokens
-    if response_format is not None:
-        completion_args["response_format"] = response_format
-    if tools is not None:
-        completion_args["tools"] = tools
-    if stream:
-        completion_args["stream"] = True
-    if extra_headers:
-        completion_args["extra_headers"] = extra_headers
+        generation_config.max_output_tokens = max_tokens
+    
+    # Handle JSON response format if specified
+    if response_format is not None and response_format.get("type") == "json_object":
+        generation_config.response_mime_type = "application/json"
+    
+    # Convert OpenAI message format to Gemini content format
+    # Gemini expects a single string or explicitly formatted content
+    prompt = ""
+    for message in messages:
+        role = message.get("role", "")
+        content = message.get("content", "")
+        if role == "system":
+            prompt += f"System: {content}\n\n"
+        elif role == "user":
+            prompt += f"User: {content}\n\n"
+        elif role == "assistant":
+            prompt += f"Assistant: {content}\n\n"
+        else:
+            prompt += f"{content}\n\n"
     
     try:
-        # Make the API call using the OpenAI SDK
-        completion = client.chat.completions.create(**completion_args)
+        # Create the model and generate content
+        model_instance = genai.GenerativeModel(model)
+        response = model_instance.generate_content(
+            prompt, 
+            generation_config=generation_config
+        )
         
-        # Return the response based on stream parameter
+        # Format the response to match the expected structure
         if stream:
-            return completion
-        else:
-            # For compatibility with the previous implementation, convert the response to a dict format
-            return completion.model_dump()
+            # Streaming not directly supported in this implementation
+            # Would need custom handling
+            return response
+        
+        # Extract content from response
+        content = ""
+        if response.parts:
+            content = ''.join(part.text for part in response.parts)
+        
+        # Return in a format compatible with the previous implementation
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": content
+                    }
+                }
+            ]
+        }
     except Exception as e:
         raise Exception(f"API call failed: {str(e)}")

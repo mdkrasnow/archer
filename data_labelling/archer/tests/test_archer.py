@@ -110,7 +110,7 @@ class TestArcher:
         # Initialize Archer
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir1", "kb_dir2"],
             rubric="Test rubric",
@@ -127,7 +127,7 @@ class TestArcher:
         
         # Evaluator initialization
         mocks['evaluator_cls'].assert_called_once_with(
-            model_name="claude-3",
+            model_name="gemini-2.0-flash",
             knowledge_base=["Document 1", "Document 2"],
             rubric="Test rubric"
         )
@@ -184,7 +184,7 @@ class TestArcher:
         # Initialize Archer with custom values
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir1", "kb_dir2"],
             rubric="Test rubric",
@@ -258,7 +258,7 @@ class TestArcher:
         # Initialize Archer
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -316,7 +316,7 @@ class TestArcher:
         # Initialize Archer with human validation enabled
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -369,7 +369,7 @@ class TestArcher:
         # Initialize Archer with multiple input types
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -416,7 +416,7 @@ class TestArcher:
         # Initialize Archer
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -481,7 +481,7 @@ class TestArcher:
         # Initialize Archer
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -524,7 +524,7 @@ class TestArcher:
         # Initialize Archer with variation traits
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -591,7 +591,7 @@ class TestArcher:
         # Initialize Archer with a small number of validation attempts
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -636,7 +636,7 @@ class TestArcher:
         # Initialize Archer
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -691,7 +691,7 @@ class TestArcher:
         # Initialize Archer
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
@@ -753,7 +753,7 @@ class TestArcher:
         # Initialize Archer
         archer = Archer(
             generator_model_name="gemini-2.0-flash",
-            evaluator_model_name="claude-3",
+            evaluator_model_name="gemini-2.0-flash",
             optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",

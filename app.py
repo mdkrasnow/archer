@@ -85,9 +85,9 @@ def initialize_archer():
     
     # Initialize Archer with the Danielson model
     archer = Archer(
-        generator_model_name="claude-3-sonnet",
-        evaluator_model_name="claude-3-opus",
-        optimizer_model_name="claude-3-sonnet",
+        generator_model_name="gemini-2.0-flash",
+        evaluator_model_name="gemini-2.0-flash",
+        optimizer_model_name="gemini-2.0-flash",
         knowledge_base=["./data_labelling/eval"],  # Path to knowledge directories
         rubric=rubric,
         initial_prompts=initial_prompts,

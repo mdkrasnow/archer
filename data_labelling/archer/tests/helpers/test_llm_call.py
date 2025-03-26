@@ -25,7 +25,7 @@ class TestLLMCall:
             result = llm_call(
                 messages=[{"role": "user", "content": "Hello"}],
                 openrouter_api_key="test-key",
-                model="openai/gemini-2.0-flasho"
+                model="gemini-2.0-flash"
             )
             
             # Assert the result
@@ -45,7 +45,7 @@ class TestLLMCall:
             assert headers["Authorization"] == "Bearer test-key"
             assert headers["Content-Type"] == "application/json"
             # Verify payload
-            assert data["model"] == "openai/gemini-2.0-flasho"
+            assert data["model"] == "gemini-2.0-flash"
             assert data["messages"] == [{"role": "user", "content": "Hello"}]
             assert data["temperature"] == 0.7  # Default value
     
@@ -84,7 +84,7 @@ class TestLLMCall:
             llm_call(
                 messages=[{"role": "user", "content": "Hello"}],
                 openrouter_api_key="test-key",
-                model="anthropic/claude-3-opus",
+                model="gemini-2.0-flash",
                 site_url="https://example.com",
                 site_name="Test Site",
                 temperature=0.5,
@@ -103,7 +103,7 @@ class TestLLMCall:
             assert headers["X-Title"] == "Test Site"
             
             # Verify payload contains all parameters
-            assert data["model"] == "anthropic/claude-3-opus"
+            assert data["model"] == "gemini-2.0-flash"
             assert data["temperature"] == 0.5
             assert data["max_tokens"] == 100
             assert data["response_format"] == {"type": "json_object"}
@@ -136,7 +136,7 @@ class TestLLMCall:
             "id": "chatcmpl-123",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "openai/gemini-2.0-flasho",
+            "model": "gemini-2.0-flash",
             "choices": [{
                 "index": 0,
                 "message": {

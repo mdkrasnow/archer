@@ -12,7 +12,7 @@ from forwardPass.evaluator import AIExpert
 class TestAIExpert:
     def test_aiexpert_initialization(self):
         """Test that AIExpert initializes with correct parameters"""
-        model_name = "claude-3"
+        model_name = "gemini-2.0-flash"
         knowledge_base = ["Document 1", "Document 2"]
         rubric = {"clarity": {"weight": 0.5, "description": "Is the content clear?"}}
         
@@ -42,7 +42,7 @@ class TestAIExpert:
             ]
         }
         
-        model_name = "claude-3"
+        model_name = "gemini-2.0-flash"
         knowledge_base = ["Document 1", "Document 2"]
         rubric = {"clarity": {"weight": 0.5, "description": "Is the content clear?"}}
         
@@ -115,7 +115,7 @@ class TestAIExpert:
         }
         
         # Create the expert and apply the mock method
-        model_name = "claude-3"
+        model_name = "gemini-2.0-flash"
         knowledge_base = ["Document 1", "Document 2"]
         rubric = {"clarity": {"weight": 0.5, "description": "Is the content clear?"}}
         
@@ -157,7 +157,7 @@ class TestAIExpert:
         
         mock_llm_call.side_effect = mock_responses
         
-        model_name = "claude-3"
+        model_name = "gemini-2.0-flash"
         knowledge_base = ["Document 1", "Document 2"]
         rubric = {"clarity": {"weight": 0.5, "description": "Is the content clear?"}}
         
@@ -205,7 +205,7 @@ class TestAIExpert:
             ]
         }
         
-        expert = AIExpert("claude-3", ["Document 1"], {"clarity": {"weight": 0.5}})
+        expert = AIExpert("gemini-2.0-flash", ["Document 1"], {"clarity": {"weight": 0.5}})
         result = expert.evaluate("", "Create compelling sales email")
         
         # Verify the result has appropriate fallback values
@@ -222,7 +222,7 @@ class TestAIExpert:
         # Set up the mock to return an empty or invalid response
         mock_llm_call.return_value = {}
         
-        expert = AIExpert("claude-3", ["Document 1"], {"clarity": {"weight": 0.5}})
+        expert = AIExpert("gemini-2.0-flash", ["Document 1"], {"clarity": {"weight": 0.5}})
         result = expert.evaluate("Test content", "Test input")
         
         # Verify fallback values are used
@@ -233,7 +233,7 @@ class TestAIExpert:
 
     def test_missing_knowledge_base(self):
         """Test initialization with empty knowledge base"""
-        expert = AIExpert("claude-3", [], {"clarity": {"weight": 0.5}})
+        expert = AIExpert("gemini-2.0-flash", [], {"clarity": {"weight": 0.5}})
         assert expert.knowledge_base == []
         
         # Knowledge base should be empty but not cause initialization errors
@@ -256,7 +256,7 @@ class TestAIExpert:
             ]
         }
         
-        expert = AIExpert("claude-3", ["Document 1"], {"clarity": {"weight": 0.5}})
+        expert = AIExpert("gemini-2.0-flash", ["Document 1"], {"clarity": {"weight": 0.5}})
         result = expert.evaluate(long_content, "Create compelling email")
         
         # Verify the long content was included in the LLM call
