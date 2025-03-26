@@ -93,7 +93,7 @@ class ArgillaDatabase:
                                 name="feedback",
                                 title="Feedback",
                                 description="Provide feedback on how to improve the output"
-                            )
+                            ),
                         ],
                         metadata=[
                             rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
@@ -286,15 +286,49 @@ class ArgillaDatabase:
             bool: True if storage is successful, False otherwise
         """
         try:
-            if not self.client or "evaluations" not in self.datasets:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return False
+            
+            # Check if evaluations dataset exists and is properly initialized
+            if "evaluations" not in self.datasets or self.datasets["evaluations"] is None:
+                logger.info("Evaluations dataset not loaded yet, initializing datasets")
                 success = self.initialize_datasets()
                 if not success:
+                    logger.error("Failed to initialize datasets")
                     return False
+                
+            # Confirm that we actually have the dataset now
+            if self.datasets["evaluations"] is None:
+                logger.error("Evaluations dataset still not available after initialization")
+                return False
             
             # Get the original output
             output = self._get_output(output_id)
             if not output:
                 logger.error(f"Output with ID {output_id} not found")
+                return False
+            
+            # Handle the output structure - extract fields and metadata safely
+            try:
+                # Safely extract fields data
+                if isinstance(output, dict) and 'fields' in output:
+                    input_data = output["fields"].get("input", "")
+                    generated_content = output["fields"].get("generated_content", "")
+                    prompt_id = output["metadata"].get("prompt_id", "unknown") if "metadata" in output else "unknown"
+                elif hasattr(output, 'fields'):
+                    input_data = getattr(getattr(output, 'fields', object()), 'input', "")
+                    generated_content = getattr(getattr(output, 'fields', object()), 'generated_content', "")
+                    prompt_id = getattr(getattr(output, 'metadata', object()), 'prompt_id', "unknown")
+                else:
+                    logger.error(f"Output found but has unexpected structure: {type(output)}")
+                    return False
+            except Exception as e:
+                logger.error(f"Error extracting data from output: {str(e)}")
                 return False
             
             # Create a unique ID for this evaluation
@@ -310,25 +344,39 @@ class ArgillaDatabase:
             # Create a record
             record = rg.Record(
                 fields={
-                    "input": output["fields"]["input"],
-                    "generated_content": output["fields"]["generated_content"],
+                    "input": input_data,
+                    "generated_content": generated_content,
                     "evaluation_content": ""  # This will be filled by responses
                 },
                 responses=responses,
                 metadata={
                     "output_id": output_id,
-                    "prompt_id": output["metadata"]["prompt_id"],
+                    "prompt_id": prompt_id,
                     "evaluator_id": evaluator_id,
                     "is_human": "1" if is_human else "0",
                     "timestamp": datetime.now().isoformat()
                 }
             )
             
-            # Add the record to the dataset
-            self.datasets["evaluations"].records.log([record])
-            
-            logger.info(f"Stored evaluation for output ID: {output_id}")
-            return True
+            try:
+                # Add the record to the dataset
+                self.datasets["evaluations"].records.log([record])
+                logger.info(f"Stored evaluation for output ID: {output_id}")
+                return True
+            except Exception as log_error:
+                logger.error(f"Error logging evaluation record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry evaluation logging")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["evaluations"].records.log([record])
+                        logger.info(f"Successfully stored evaluation after retry")
+                        return True
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return False
             
         except Exception as e:
             logger.error(f"Error storing evaluation: {str(e)}")
@@ -366,10 +414,26 @@ class ArgillaDatabase:
             str: ID of the stored prompt, or None if storage failed
         """
         try:
-            if not self.client or "prompts" not in self.datasets:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if prompts dataset exists and is properly initialized
+            if "prompts" not in self.datasets or self.datasets["prompts"] is None:
+                logger.info("Prompts dataset not loaded yet, initializing datasets")
                 success = self.initialize_datasets()
                 if not success:
+                    logger.error("Failed to initialize datasets")
                     return None
+                
+            # Confirm that we actually have the dataset now
+            if self.datasets["prompts"] is None:
+                logger.error("Prompts dataset still not available after initialization")
+                return None
             
             # Create a unique ID for this prompt
             prompt_id = str(uuid.uuid4())
@@ -396,11 +460,25 @@ class ArgillaDatabase:
                 }
             )
             
-            # Add the record to the dataset
-            self.datasets["prompts"].records.log([record])
-            
-            logger.info(f"Stored prompt with ID: {prompt_id}")
-            return prompt_id
+            try:
+                # Add the record to the dataset
+                self.datasets["prompts"].records.log([record])
+                logger.info(f"Stored prompt with ID: {prompt_id}")
+                return prompt_id
+            except Exception as log_error:
+                logger.error(f"Error logging prompt record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry prompt logging")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["prompts"].records.log([record])
+                        logger.info(f"Successfully stored prompt after retry")
+                        return prompt_id
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return None
             
         except Exception as e:
             logger.error(f"Error storing prompt: {str(e)}")
@@ -741,12 +819,27 @@ class ArgillaDatabase:
             Dict: Output record, or None if not found
         """
         try:
-            if "outputs" not in self.datasets:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if outputs dataset exists and is properly initialized
+            if "outputs" not in self.datasets or self.datasets["outputs"] is None:
                 logger.info("Outputs dataset not loaded yet, initializing datasets")
                 success = self.initialize_datasets()
                 if not success:
+                    logger.error("Failed to initialize datasets")
                     return None
-                    
+                
+            # Confirm that we actually have the dataset now
+            if self.datasets["outputs"] is None:
+                logger.error("Outputs dataset still not available after initialization")
+                return None
+                
             # Query for the output using Filter
             output_filter = rg.Filter(("metadata.output_id", "==", output_id))
             query = rg.Query(filter=output_filter)
@@ -765,6 +858,7 @@ class ArgillaDatabase:
                 logger.error(f"Error querying for output: {str(query_error)}")
                 
                 # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry output query")
                 if self.connect() and self.initialize_datasets():
                     try:
                         records_iterator = self.datasets["outputs"].records(query=query)
@@ -790,12 +884,26 @@ class ArgillaDatabase:
             str: Prompt text, or None if not found
         """
         try:
-            # Check if prompts dataset exists first
-            if "prompts" not in self.datasets:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+
+            # Check if prompts dataset exists and is properly initialized
+            if "prompts" not in self.datasets or self.datasets["prompts"] is None:
                 logger.info("Prompts dataset not loaded yet, initializing datasets")
                 success = self.initialize_datasets()
                 if not success:
+                    logger.error("Failed to initialize datasets")
                     return None
+                
+            # Confirm that we actually have the dataset now
+            if self.datasets["prompts"] is None:
+                logger.error("Prompts dataset still not available after initialization")
+                return None
 
             # Query for the prompt using the Filter API
             prompt_filter = rg.Filter(("metadata.prompt_id", "==", prompt_id))
@@ -811,7 +919,7 @@ class ArgillaDatabase:
                     
                 # Return the prompt text - handle possible data structure differences
                 record = records_list[0]
-                if "fields" in record and "prompt_text" in record["fields"]:
+                if isinstance(record, dict) and "fields" in record and "prompt_text" in record["fields"]:
                     return record["fields"]["prompt_text"]
                 elif hasattr(record, 'fields') and hasattr(record.fields, 'prompt_text'):
                     return record.fields.prompt_text
@@ -820,6 +928,22 @@ class ArgillaDatabase:
                     return None
             except Exception as query_error:
                 logger.error(f"Error querying for prompt: {str(query_error)}")
+                
+                # Try once more with a fresh connection
+                logger.info("Attempting to reconnect and retry prompt query")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        records_iterator = self.datasets["prompts"].records(query=query)
+                        records_list = records_iterator.to_list(flatten=True)
+                        if records_list:
+                            record = records_list[0]
+                            if isinstance(record, dict) and "fields" in record and "prompt_text" in record["fields"]:
+                                return record["fields"]["prompt_text"]
+                            elif hasattr(record, 'fields') and hasattr(record.fields, 'prompt_text'):
+                                return record.fields.prompt_text
+                    except Exception as retry_error:
+                        logger.error(f"Retry query failed: {str(retry_error)}")
+                
                 return None
             
         except Exception as e:
