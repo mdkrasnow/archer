@@ -1,7 +1,7 @@
 """
 This module provides the llm_call function for making API calls to language models.
 """
-
+import os
 import json
 import requests
 from typing import Dict, List, Optional, Any
@@ -41,6 +41,8 @@ def llm_call(
         ValueError: If API key is missing and not in test mode.
         Exception: If the API call fails.
     """
+    if not openrouter_api_key:
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     # Special handling for test environment
     if openrouter_api_key == "test_api_key":
         # Return a mock response for testing
@@ -54,6 +56,7 @@ def llm_call(
                 }
             ]
         }
+    
     
     if not openrouter_api_key:
         raise ValueError("OpenRouter API key is required")
