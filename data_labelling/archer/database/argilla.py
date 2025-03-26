@@ -68,109 +68,127 @@ class ArgillaDatabase:
             
             # Initialize Outputs Dataset
             try:
-                self.datasets["outputs"] = rg.Dataset.from_argilla("archer_outputs")
-                logger.info("Found existing outputs dataset")
-            except:
-                logger.info("Creating new outputs dataset")
-                outputs_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="input", title="Input Data"),
-                        rg.TextField(name="generated_content", title="Generated Content"),
-                        rg.TextField(name="prompt_used", title="Prompt Used")
-                    ],
-                    questions=[
-                        rg.RatingQuestion(
-                            name="score",
-                            title="Quality Score",
-                            description="Rate the quality of the output",
-                            values=[1, 2, 3, 4, 5]
-                        ),
-                        rg.TextQuestion(
-                            name="feedback",
-                            title="Feedback",
-                            description="Provide feedback on how to improve the output"
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="round", title="Round Number"),
-                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
-                        rg.TermsMetadataProperty(name="output_id", title="Output ID")
-                    ]
-                )
-                self.datasets["outputs"] = rg.Dataset(name="archer_outputs", settings=outputs_settings)
-                self.datasets["outputs"].create()
+                # First check if dataset exists by trying to fetch it
+                try:
+                    outputs_dataset = rg.Dataset.from_argilla("archer_outputs")
+                    self.datasets["outputs"] = outputs_dataset
+                    logger.info("Found existing outputs dataset")
+                except Exception as e:
+                    logger.info(f"Creating new outputs dataset: {str(e)}")
+                    outputs_settings = rg.Settings(
+                        fields=[
+                            rg.TextField(name="input", title="Input Data"),
+                            rg.TextField(name="generated_content", title="Generated Content"),
+                            rg.TextField(name="prompt_used", title="Prompt Used")
+                        ],
+                        questions=[
+                            rg.RatingQuestion(
+                                name="score",
+                                title="Quality Score",
+                                description="Rate the quality of the output",
+                                values=[1, 2, 3, 4, 5]
+                            ),
+                            rg.TextQuestion(
+                                name="feedback",
+                                title="Feedback",
+                                description="Provide feedback on how to improve the output"
+                            )
+                        ],
+                        metadata=[
+                            rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                            rg.TermsMetadataProperty(name="round", title="Round Number"),
+                            rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
+                            rg.TermsMetadataProperty(name="output_id", title="Output ID")
+                        ]
+                    )
+                    self.datasets["outputs"] = rg.Dataset(name="archer_outputs", settings=outputs_settings)
+                    self.datasets["outputs"].create()
+            except Exception as e:
+                logger.error(f"Error with outputs dataset: {str(e)}")
+                return False
             
             # Initialize Prompts Dataset
             try:
-                self.datasets["prompts"] = rg.Dataset.from_argilla("archer_prompts")
-                logger.info("Found existing prompts dataset")
-            except:
-                logger.info("Creating new prompts dataset")
-                prompts_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="prompt_text", title="Prompt Text"),
-                        rg.TextField(name="model", title="Model"),
-                        rg.TextField(name="purpose", title="Purpose")
-                    ],
-                    questions=[
-                        rg.FloatQuestion(
-                            name="average_score",
-                            title="Average Score",
-                            description="Average performance score for this prompt"
-                        ),
-                        rg.BooleanQuestion(
-                            name="survived",
-                            title="Survived",
-                            description="Whether this prompt survived to the next generation"
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
-                        rg.TermsMetadataProperty(name="generation", title="Generation Number"),
-                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
-                    ]
-                )
-                self.datasets["prompts"] = rg.Dataset(name="archer_prompts", settings=prompts_settings)
-                self.datasets["prompts"].create()
+                # First check if dataset exists by trying to fetch it
+                try:
+                    prompts_dataset = rg.Dataset.from_argilla("archer_prompts")
+                    self.datasets["prompts"] = prompts_dataset
+                    logger.info("Found existing prompts dataset")
+                except Exception as e:
+                    logger.info(f"Creating new prompts dataset: {str(e)}")
+                    prompts_settings = rg.Settings(
+                        fields=[
+                            rg.TextField(name="prompt_text", title="Prompt Text"),
+                            rg.TextField(name="model", title="Model"),
+                            rg.TextField(name="purpose", title="Purpose")
+                        ],
+                        questions=[
+                            rg.FloatQuestion(
+                                name="average_score",
+                                title="Average Score",
+                                description="Average performance score for this prompt"
+                            ),
+                            rg.BooleanQuestion(
+                                name="survived",
+                                title="Survived",
+                                description="Whether this prompt survived to the next generation"
+                            )
+                        ],
+                        metadata=[
+                            rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                            rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
+                            rg.TermsMetadataProperty(name="generation", title="Generation Number"),
+                            rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
+                        ]
+                    )
+                    self.datasets["prompts"] = rg.Dataset(name="archer_prompts", settings=prompts_settings)
+                    self.datasets["prompts"].create()
+            except Exception as e:
+                logger.error(f"Error with prompts dataset: {str(e)}")
+                return False
             
             # Initialize Evaluations Dataset
             try:
-                self.datasets["evaluations"] = rg.Dataset.from_argilla("archer_evaluations")
-                logger.info("Found existing evaluations dataset")
-            except:
-                logger.info("Creating new evaluations dataset")
-                evaluations_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="input", title="Input Data"),
-                        rg.TextField(name="generated_content", title="Generated Content"),
-                        rg.TextField(name="evaluation_content", title="Evaluation")
-                    ],
-                    questions=[
-                        rg.RatingQuestion(
-                            name="score",
-                            title="Quality Score",
-                            description="Rate the quality of the output",
-                            values=[1, 2, 3, 4, 5]
-                        ),
-                        rg.TextQuestion(
-                            name="feedback",
-                            title="Feedback",
-                            description="Feedback on how to improve"
-                        ),
-                        rg.TextField(name="improved_output", title="Improved Output")
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="output_id", title="Output ID"),
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="evaluator_id", title="Evaluator ID"),
-                        rg.TermsMetadataProperty(name="is_human", title="Is Human Evaluation"),
-                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
-                    ]
-                )
-                self.datasets["evaluations"] = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
-                self.datasets["evaluations"].create()
+                # First check if dataset exists by trying to fetch it
+                try:
+                    evaluations_dataset = rg.Dataset.from_argilla("archer_evaluations")
+                    self.datasets["evaluations"] = evaluations_dataset
+                    logger.info("Found existing evaluations dataset")
+                except Exception as e:
+                    logger.info(f"Creating new evaluations dataset: {str(e)}")
+                    evaluations_settings = rg.Settings(
+                        fields=[
+                            rg.TextField(name="input", title="Input Data"),
+                            rg.TextField(name="generated_content", title="Generated Content"),
+                            rg.TextField(name="evaluation_content", title="Evaluation")
+                        ],
+                        questions=[
+                            rg.RatingQuestion(
+                                name="score",
+                                title="Quality Score",
+                                description="Rate the quality of the output",
+                                values=[1, 2, 3, 4, 5]
+                            ),
+                            rg.TextQuestion(
+                                name="feedback",
+                                title="Feedback",
+                                description="Feedback on how to improve"
+                            ),
+                            rg.TextField(name="improved_output", title="Improved Output")
+                        ],
+                        metadata=[
+                            rg.TermsMetadataProperty(name="output_id", title="Output ID"),
+                            rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                            rg.TermsMetadataProperty(name="evaluator_id", title="Evaluator ID"),
+                            rg.TermsMetadataProperty(name="is_human", title="Is Human Evaluation"),
+                            rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
+                        ]
+                    )
+                    self.datasets["evaluations"] = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
+                    self.datasets["evaluations"].create()
+            except Exception as e:
+                logger.error(f"Error with evaluations dataset: {str(e)}")
+                return False
                 
             logger.info("All datasets initialized successfully")
             return True
@@ -202,15 +220,15 @@ class ArgillaDatabase:
             # Create a unique ID for this output
             output_id = str(uuid.uuid4())
             
-            # Get the prompt text for reference
-            prompt_text = self._get_prompt_text(prompt_id)
+            # Get the prompt text for reference, but continue even if not found
+            prompt_text = self._get_prompt_text(prompt_id) or "Unknown prompt"
             
             # Create a record
             record = rg.Record(
                 fields={
                     "input": input_data,
                     "generated_content": content,
-                    "prompt_used": prompt_text or "Unknown prompt"
+                    "prompt_used": prompt_text
                 },
                 metadata={
                     "prompt_id": prompt_id,
@@ -727,6 +745,13 @@ class ArgillaDatabase:
             str: Prompt text, or None if not found
         """
         try:
+            # Check if prompts dataset exists first
+            if "prompts" not in self.datasets:
+                logger.info("Prompts dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    return None
+
             # Query for the prompt
             prompt_filter = rg.Filter(("metadata.prompt_id", "==", prompt_id))
             query = rg.Query(filter=prompt_filter)
