@@ -12,8 +12,8 @@ import copy
 import adalflow as adal
 from adalflow.optim.parameter import Parameter, ParameterType
 
-from helpers.prompt import Prompt
-from helpers.llm_call import llm_call
+from archer.helpers.prompt import Prompt
+from archer.helpers.llm_call import llm_call
 
 
 class Model:

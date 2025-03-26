@@ -3,7 +3,7 @@ This module defines the AIExpert class for evaluating generated content.
 """
 
 from typing import List, Dict, Any
-from helpers.llm_call import llm_call
+from archer.helpers.llm_call import llm_call
 
 class AIExpert:
     """

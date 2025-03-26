@@ -2,7 +2,7 @@
 This module defines the GenerativeModel class for generating content using LLMs.
 """
 
-from helpers.llm_call import llm_call as default_llm_call
+from archer.helpers.llm_call import llm_call as default_llm_call
 
 class GenerativeModel:
     """

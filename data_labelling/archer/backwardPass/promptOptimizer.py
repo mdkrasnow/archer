@@ -7,8 +7,8 @@ from typing import List, Dict, Any, Optional, Union, Tuple
 import copy
 import random
 
-from helpers.llm_call import llm_call
-from helpers.prompt import Prompt
+from archer.helpers.llm_call import llm_call
+from archer.helpers.prompt import Prompt
 
 # Check if AdaLFlow is available
 try:

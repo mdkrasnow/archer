@@ -15,13 +15,13 @@ Note:
 import os
 import random
 from typing import List, Dict, Any, Callable, Union, Tuple, Optional
-from helpers.prompt import Prompt
-from backwardPass.promptOptimizer import PromptOptimizer
-from backwardPass.PromptEvaluator.promptEvaluator import PromptEvaluator
-from forwardPass.evaluator import AIExpert
-from forwardPass.generator import GenerativeModel
-from forwardPass.human.human import HumanValidation
-from helpers.visualization import PerformanceTracker
+from archer.helpers.prompt import Prompt
+from archer.backwardPass.promptOptimizer import PromptOptimizer
+from archer.backwardPass.PromptEvaluator.promptEvaluator import PromptEvaluator
+from archer.forwardPass.evaluator import AIExpert
+from archer.forwardPass.generator import GenerativeModel
+from archer.forwardPass.human.human import HumanValidation
+from archer.helpers.visualization import PerformanceTracker
 # Assuming we'll implement Argilla integration, import placeholder:
 # from database.argilla import ArgillaDB
 

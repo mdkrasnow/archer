@@ -8,6 +8,6 @@ This includes:
 - DanielsonModel: Specialization of Model for Danielson framework
 """
 
-from backwardPass.promptOptimizer import PromptOptimizer
-from backwardPass.model import Model
-from backwardPass.danielson_model import DanielsonModel 
+from archer.backwardPass.promptOptimizer import PromptOptimizer
+from archer.backwardPass.model import Model
+from archer.backwardPass.danielson_model import DanielsonModel 

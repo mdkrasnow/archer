@@ -12,8 +12,8 @@ from typing import Dict, Any, List, Optional
 # Add the parent directory to sys.path to allow for imports from sibling directories
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from backwardPass.model import Model
-from helpers.prompt import Prompt
+from archer.backwardPass.model import Model
+from archer.helpers.prompt import Prompt
 from eval.danielson import generate_ai_content, normalize_score_integer
 
 class DanielsonModel(Model):
