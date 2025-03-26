@@ -72,8 +72,12 @@ class ArgillaDatabase:
                 # First check if dataset exists by trying to fetch it
                 try:
                     outputs_dataset = self.client.datasets("archer_outputs")
-                    self.datasets["outputs"] = outputs_dataset
-                    logger.info("Found existing outputs dataset")
+                    # Verify the dataset was actually found and not None
+                    if outputs_dataset is not None:
+                        self.datasets["outputs"] = outputs_dataset
+                        logger.info("Found existing outputs dataset")
+                    else:
+                        raise Exception("Dataset returned is None")
                 except Exception as e:
                     logger.info(f"Creating new outputs dataset: {str(e)}")
                     outputs_settings = rg.Settings(
@@ -102,9 +106,13 @@ class ArgillaDatabase:
                             rg.TermsMetadataProperty(name="output_id", title="Output ID")
                         ]
                     )
+                    logger.info("Creating archer_outputs dataset...")
                     new_dataset = rg.Dataset(name="archer_outputs", settings=outputs_settings)
                     new_dataset.create()
+                    # Verify creation worked by fetching again
                     self.datasets["outputs"] = self.client.datasets("archer_outputs")
+                    if self.datasets["outputs"] is None:
+                        raise Exception("Failed to create archer_outputs dataset")
                     logger.info("Created new outputs dataset")
             except Exception as e:
                 logger.error(f"Error with outputs dataset: {str(e)}")
@@ -115,8 +123,12 @@ class ArgillaDatabase:
                 # First check if dataset exists by trying to fetch it
                 try:
                     prompts_dataset = self.client.datasets("archer_prompts")
-                    self.datasets["prompts"] = prompts_dataset
-                    logger.info("Found existing prompts dataset")
+                    # Verify the dataset was actually found and not None
+                    if prompts_dataset is not None:
+                        self.datasets["prompts"] = prompts_dataset
+                        logger.info("Found existing prompts dataset")
+                    else:
+                        raise Exception("Dataset returned is None")
                 except Exception as e:
                     logger.info(f"Creating new prompts dataset: {str(e)}")
                     prompts_settings = rg.Settings(
@@ -144,9 +156,13 @@ class ArgillaDatabase:
                             rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
                         ]
                     )
+                    logger.info("Creating archer_prompts dataset...")
                     new_dataset = rg.Dataset(name="archer_prompts", settings=prompts_settings)
                     new_dataset.create()
+                    # Verify creation worked by fetching again
                     self.datasets["prompts"] = self.client.datasets("archer_prompts")
+                    if self.datasets["prompts"] is None:
+                        raise Exception("Failed to create archer_prompts dataset")
                     logger.info("Created new prompts dataset")
             except Exception as e:
                 logger.error(f"Error with prompts dataset: {str(e)}")
@@ -157,8 +173,12 @@ class ArgillaDatabase:
                 # First check if dataset exists by trying to fetch it
                 try:
                     evaluations_dataset = self.client.datasets("archer_evaluations")
-                    self.datasets["evaluations"] = evaluations_dataset
-                    logger.info("Found existing evaluations dataset")
+                    # Verify the dataset was actually found and not None
+                    if evaluations_dataset is not None:
+                        self.datasets["evaluations"] = evaluations_dataset
+                        logger.info("Found existing evaluations dataset")
+                    else:
+                        raise Exception("Dataset returned is None")
                 except Exception as e:
                     logger.info(f"Creating new evaluations dataset: {str(e)}")
                     evaluations_settings = rg.Settings(
@@ -189,14 +209,25 @@ class ArgillaDatabase:
                             rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
                         ]
                     )
+                    logger.info("Creating archer_evaluations dataset...")
                     new_dataset = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
                     new_dataset.create()
+                    # Verify creation worked by fetching again
                     self.datasets["evaluations"] = self.client.datasets("archer_evaluations")
+                    if self.datasets["evaluations"] is None:
+                        raise Exception("Failed to create archer_evaluations dataset")
                     logger.info("Created new evaluations dataset")
             except Exception as e:
                 logger.error(f"Error with evaluations dataset: {str(e)}")
                 return False
                 
+            # Verify all datasets exist
+            if not all(self.datasets.get(k) is not None for k in ["outputs", "prompts", "evaluations"]):
+                logger.error("Not all datasets were properly initialized")
+                missing = [k for k in ["outputs", "prompts", "evaluations"] if self.datasets.get(k) is None]
+                logger.error(f"Missing datasets: {', '.join(missing)}")
+                return False
+            
             logger.info("All datasets initialized successfully")
             return True
             
