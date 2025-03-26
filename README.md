@@ -87,7 +87,7 @@ knowledge_base_dirs = ["./knowledge/domain1", "./knowledge/domain2"]
 
 # Initialize Archer
 archer = Archer(
-    generator_model_name="gpt-4",              # Model for content generation
+    generator_model_name="gemini-2.0-flash",              # Model for content generation
     evaluator_model_name="claude-3-opus",      # Model for evaluation
     optimizer_model_name="claude-3-sonnet",    # Model for prompt optimization
     knowledge_base=knowledge_base_dirs,        # List of directory paths
@@ -198,7 +198,7 @@ content_prompts = [
 
 # Initialize Archer for content generation
 content_archer = Archer(
-    generator_model_name="gpt-4",
+    generator_model_name="gemini-2.0-flash",
     evaluator_model_name="claude-3-opus",
     optimizer_model_name="claude-3-sonnet",
     knowledge_base=["./knowledge/writing", "./knowledge/blogging"],

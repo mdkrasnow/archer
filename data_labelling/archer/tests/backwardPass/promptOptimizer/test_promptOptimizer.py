@@ -52,7 +52,7 @@ class TestPromptOptimizer:
         mock_tgd.return_value = MagicMock()
         mock_client.return_value = MagicMock()
         
-        model_name = "gpt-4"
+        model_name = "gemini-2.0-flash"
         variation_traits = ["clarity", "specificity"]
         
         optimizer = PromptOptimizer(
@@ -75,7 +75,7 @@ class TestPromptOptimizer:
     
     def test_gradient_magnitude_calculation(self):
         """Test the gradient magnitude calculation based on scores"""
-        optimizer = PromptOptimizer("gpt-4")
+        optimizer = PromptOptimizer("gemini-2.0-flash")
         
         # Low score should result in high magnitude
         low_mag = optimizer._calculate_gradient_magnitude(1.0, 5.0)
@@ -104,7 +104,7 @@ class TestPromptOptimizer:
         mock_llm_call.return_value = mock_response
         
         # Create optimizer and test prompt
-        optimizer = PromptOptimizer("gpt-4")
+        optimizer = PromptOptimizer("gemini-2.0-flash")
         original_prompt = Prompt(
             content="Create a compelling sales email",
         )
@@ -145,7 +145,7 @@ class TestPromptOptimizer:
         }
         mock_llm_call.return_value = mock_response
         
-        optimizer = PromptOptimizer("gpt-4")
+        optimizer = PromptOptimizer("gemini-2.0-flash")
         original_prompt = Prompt(content="Brief email about sale")
         feedback = "Too generic, lacks specific details, no clear audience or benefit"
         score = 1.5  # Very low score
@@ -182,7 +182,7 @@ class TestPromptOptimizer:
         }
         mock_llm_call.return_value = mock_response
         
-        optimizer = PromptOptimizer("gpt-4")
+        optimizer = PromptOptimizer("gemini-2.0-flash")
         original_prompt = Prompt(content="Create a personalized email highlighting key benefits of our premium service")
         feedback = "Already strong, just needs minor refinement in tone"
         score = 4.8  # Very high score
@@ -207,7 +207,7 @@ class TestPromptOptimizer:
     @patch('backwardPass.promptOptimizer.llm_call', side_effect=Exception("LLM error"))
     def test_error_handling(self, mock_llm_call):
         """Test handling of LLM call integration failures"""
-        optimizer = PromptOptimizer("gpt-4")
+        optimizer = PromptOptimizer("gemini-2.0-flash")
         original_prompt = Prompt(content="Original prompt content")
         feedback = "Some feedback"
         score = 3.0
@@ -232,7 +232,7 @@ class TestPromptOptimizer:
         mock_llm_call.side_effect = mock_responses
         
         optimizer = PromptOptimizer(
-            "gpt-4", 
+            "gemini-2.0-flash", 
             variation_traits=["clarity", "specificity"]
         )
         base_prompt = Prompt(content="Create a sales email", score=4.0)
@@ -279,7 +279,7 @@ class TestPromptOptimizer:
         ]
         mock_llm_call.side_effect = mock_responses
         
-        optimizer = PromptOptimizer("gpt-4", adalflow_enabled=True)
+        optimizer = PromptOptimizer("gemini-2.0-flash", adalflow_enabled=True)
         prompts = [
             Prompt(content="Prompt 1", score=3.5, generation=1),
             Prompt(content="Prompt 2", score=4.0, generation=1)
@@ -334,7 +334,7 @@ class TestPromptOptimizer:
         }
 
         # Create the optimizer with AdaLFlow enabled
-        optimizer = PromptOptimizer("gpt-4", adalflow_enabled=True)
+        optimizer = PromptOptimizer("gemini-2.0-flash", adalflow_enabled=True)
         
         # Create feedback and score maps
         feedback_map = {
@@ -396,7 +396,7 @@ class TestPromptOptimizer:
         
         # Create the optimizer
         optimizer = PromptOptimizer(
-            "gpt-4", 
+            "gemini-2.0-flash", 
             adalflow_enabled=True,
             variation_traits=["clarity"]
         )
@@ -449,7 +449,7 @@ class TestPromptOptimizer:
         }
         
         # Create the optimizer
-        optimizer = PromptOptimizer("gpt-4", adalflow_enabled=True)
+        optimizer = PromptOptimizer("gemini-2.0-flash", adalflow_enabled=True)
         
         # Mock optimize_model to return True
         optimizer.optimize_model = MagicMock(return_value=True)

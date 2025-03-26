@@ -3,12 +3,12 @@ This module provides the llm_call function for making API calls to language mode
 """
 import os
 import json
-import requests
 from typing import Dict, List, Optional, Any
+from openai import OpenAI
 
 def llm_call(
     messages: List[Dict[str, str]],
-    model: str = "openai/gpt-4-turbo",
+    model: str = "openai/gemini-2.0-flash-turbo",
     openrouter_api_key: str = None,
     site_url: Optional[str] = None,
     site_name: Optional[str] = None,
@@ -19,7 +19,7 @@ def llm_call(
     tools: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
-    Make an API call to a language model through OpenRouter.
+    Make an API call to a language model through OpenRouter using the OpenAI SDK.
     
     Args:
         messages (list): List of message objects with 'role' and 'content' keys.
@@ -61,22 +61,21 @@ def llm_call(
     if not openrouter_api_key:
         raise ValueError("OpenRouter API key is required")
     
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    # Initialize the OpenAI client with OpenRouter base URL
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=openrouter_api_key,
+    )
     
-    # Set up the headers according to OpenRouter docs
-    headers = {
-        "Authorization": f"Bearer {openrouter_api_key}",
-        "Content-Type": "application/json",
-    }
-    
-    # Add site info if provided - using the correct format from OpenRouter docs
+    # Set up extra headers for site info if provided
+    extra_headers = {}
     if site_url:
-        headers["HTTP-Referer"] = site_url
+        extra_headers["HTTP-Referer"] = site_url
     if site_name:
-        headers["X-Title"] = site_name
+        extra_headers["X-Title"] = site_name
     
-    # Prepare the request payload
-    payload = {
+    # Prepare the arguments for the API call
+    completion_args = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
@@ -84,29 +83,25 @@ def llm_call(
     
     # Add optional parameters if provided
     if max_tokens is not None:
-        payload["max_tokens"] = max_tokens
+        completion_args["max_tokens"] = max_tokens
     if response_format is not None:
-        payload["response_format"] = response_format
+        completion_args["response_format"] = response_format
     if tools is not None:
-        payload["tools"] = tools
+        completion_args["tools"] = tools
     if stream:
-        payload["stream"] = True
+        completion_args["stream"] = True
+    if extra_headers:
+        completion_args["extra_headers"] = extra_headers
     
-    # Make the API call
-    response = requests.post(url=url, headers=headers, json=payload)
-    
-    # Handle the response
-    if stream:
-        # For streaming, just return the response object
-        if response.status_code != 200:
-            raise Exception(f"API call failed with status {response.status_code}: {response.text}")
-        return response
-    else:
-        # For non-streaming, check status and parse the response
-        if response.status_code != 200:
-            raise Exception(f"API call failed with status {response.status_code}: {response.text}")
+    try:
+        # Make the API call using the OpenAI SDK
+        completion = client.chat.completions.create(**completion_args)
         
-        try:
-            return response.json()
-        except json.JSONDecodeError as e:
-            raise e
+        # Return the response based on stream parameter
+        if stream:
+            return completion
+        else:
+            # For compatibility with the previous implementation, convert the response to a dict format
+            return completion.model_dump()
+    except Exception as e:
+        raise Exception(f"API call failed: {str(e)}")

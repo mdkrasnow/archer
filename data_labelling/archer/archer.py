@@ -81,7 +81,7 @@ class Archer:
         Initialize a new Archer instance.
 
         Args:
-            generator_model_name: Identifier for the generative model (e.g., "gpt-4").
+            generator_model_name: Identifier for the generative model (e.g., "gemini-2.0-flash").
             evaluator_model_name: Identifier for the evaluator model (e.g., "claude-3").
             optimizer_model_name: Identifier for the LLM used in prompt optimization.
             knowledge_base: List of directory paths containing text documents for RAG.

@@ -180,7 +180,7 @@ class TestModel:
         test_prompt = Prompt(content="Original content")
         model.add_prompt("main_prompt", test_prompt)
         
-        optimizer = PromptOptimizer(model_name="gpt-4")
+        optimizer = PromptOptimizer(model_name="gemini-2.0-flash")
         
         # Optimize the prompt
         result = model.optimize_prompt("main_prompt", optimizer, "Need improvements", 3.0)

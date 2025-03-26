@@ -25,7 +25,7 @@ class TestLLMCall:
             result = llm_call(
                 messages=[{"role": "user", "content": "Hello"}],
                 openrouter_api_key="test-key",
-                model="openai/gpt-4o"
+                model="openai/gemini-2.0-flasho"
             )
             
             # Assert the result
@@ -45,7 +45,7 @@ class TestLLMCall:
             assert headers["Authorization"] == "Bearer test-key"
             assert headers["Content-Type"] == "application/json"
             # Verify payload
-            assert data["model"] == "openai/gpt-4o"
+            assert data["model"] == "openai/gemini-2.0-flasho"
             assert data["messages"] == [{"role": "user", "content": "Hello"}]
             assert data["temperature"] == 0.7  # Default value
     
@@ -136,7 +136,7 @@ class TestLLMCall:
             "id": "chatcmpl-123",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "openai/gpt-4o",
+            "model": "openai/gemini-2.0-flasho",
             "choices": [{
                 "index": 0,
                 "message": {

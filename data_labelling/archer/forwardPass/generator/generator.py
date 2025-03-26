@@ -20,7 +20,7 @@ class GenerativeModel:
         Initialize a new GenerativeModel.
 
         Args:
-            model_name (str): Name/identifier of the LLM (e.g., "gpt-4").
+            model_name (str): Name/identifier of the LLM (e.g., "gemini-2.0-flash").
             temperature (float, optional): Temperature setting for generation.
             top_p (float, optional): Top-p setting for generation.
             generation_func (callable, optional): Custom generation function.

@@ -109,9 +109,9 @@ class TestArcher:
         
         # Initialize Archer
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir1", "kb_dir2"],
             rubric="Test rubric",
             initial_prompts=test_prompts,
@@ -122,7 +122,7 @@ class TestArcher:
         mocks = mock_dependencies
         
         # Generator initialization
-        mocks['generator_cls'].assert_called_once_with(model_name="gpt-4", temperature=0.7)
+        mocks['generator_cls'].assert_called_once_with(model_name="gemini-2.0-flash", temperature=0.7)
         mocks['generator'].set_prompts.assert_called_once_with(test_prompts)
         
         # Evaluator initialization
@@ -134,7 +134,7 @@ class TestArcher:
         
         # Optimizer initialization
         mocks['optimizer_cls'].assert_called_once_with(
-            model_name="gpt-4",
+            model_name="gemini-2.0-flash",
             temperature=0.7,
             adalflow_enabled=False,
             max_trials=5,
@@ -183,9 +183,9 @@ class TestArcher:
         
         # Initialize Archer with custom values
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir1", "kb_dir2"],
             rubric="Test rubric",
             initial_prompts=test_prompts,
@@ -257,9 +257,9 @@ class TestArcher:
         
         # Initialize Archer
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=test_prompts,
@@ -315,9 +315,9 @@ class TestArcher:
         
         # Initialize Archer with human validation enabled
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=test_prompts,
@@ -368,9 +368,9 @@ class TestArcher:
         
         # Initialize Archer with multiple input types
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=test_prompts,
@@ -415,9 +415,9 @@ class TestArcher:
         
         # Initialize Archer
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=[test_prompt],
@@ -480,9 +480,9 @@ class TestArcher:
         
         # Initialize Archer
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=[test_prompt],
@@ -523,9 +523,9 @@ class TestArcher:
         
         # Initialize Archer with variation traits
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=base_prompts,
@@ -590,9 +590,9 @@ class TestArcher:
         
         # Initialize Archer with a small number of validation attempts
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=test_prompts,
@@ -635,9 +635,9 @@ class TestArcher:
         
         # Initialize Archer
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=[],
@@ -690,9 +690,9 @@ class TestArcher:
         
         # Initialize Archer
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=[test_prompt],
@@ -752,9 +752,9 @@ class TestArcher:
         
         # Initialize Archer
         archer = Archer(
-            generator_model_name="gpt-4",
+            generator_model_name="gemini-2.0-flash",
             evaluator_model_name="claude-3",
-            optimizer_model_name="gpt-4",
+            optimizer_model_name="gemini-2.0-flash",
             knowledge_base=["kb_dir"],
             rubric="Test rubric",
             initial_prompts=[test_prompt],
