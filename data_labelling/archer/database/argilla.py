@@ -1014,7 +1014,7 @@ class ArgillaDatabase:
                         rg.TermsMetadataProperty(name="evaluator_prompt_id", title="Evaluator Prompt ID"),
                         rg.TermsMetadataProperty(name="round_id", title="Round ID"),
                         rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
-                        rg.TermsMetadataProperty(name="is_validated", title="Is Validated")
+                        rg.TermsMetadataProperty(name="validated_status", title="Is Validated")  # Renamed from "is_validated" to avoid potential conflict
                     ]
                 )
                 
@@ -1079,7 +1079,7 @@ class ArgillaDatabase:
                         rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
                         rg.TermsMetadataProperty(name="avg_score_metadata", title="Average Score"),
                         rg.TermsMetadataProperty(name="rounds_survived", title="Rounds Survived"),
-                        rg.TermsMetadataProperty(name="is_active", title="Is Active"),
+                        rg.TermsMetadataProperty(name="active_status", title="Is Active"),  # Renamed from "is_active" to avoid potential conflict
                         rg.TermsMetadataProperty(name="created_at", title="Created At"),
                         rg.TermsMetadataProperty(name="version", title="Version")
                     ]
@@ -1143,7 +1143,7 @@ class ArgillaDatabase:
                     ],
                     metadata=[
                         rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="is_active", title="Is Active"),
+                        rg.TermsMetadataProperty(name="active_status", title="Is Active"),  # Renamed from "is_active" to avoid conflict
                         rg.TermsMetadataProperty(name="created_at", title="Created At"),
                         rg.TermsMetadataProperty(name="version", title="Version")
                     ]
@@ -1331,7 +1331,7 @@ class ArgillaDatabase:
                     "evaluator_prompt_id": evaluator_prompt_id,
                     "round_id": round_id,
                     "timestamp": datetime.now().isoformat(),
-                    "is_validated": "False"
+                    "validated_status": "False"  # Updated to match renamed property
                 }
             )
             
@@ -1483,7 +1483,7 @@ class ArgillaDatabase:
                 id=record.get("id"),
                 responses=responses,
                 metadata={
-                    "is_validated": "True"
+                    "validated_status": "True"  # Updated to match renamed property
                 }
             )
             
@@ -1554,7 +1554,7 @@ class ArgillaDatabase:
                     "parent_prompt_id": parent_prompt_id or "root",
                     "avg_score_metadata": "0.0",
                     "rounds_survived": "0",
-                    "is_active": "True",
+                    "active_status": "true",  # Updated to match renamed property
                     "created_at": datetime.now().isoformat(),
                     "version": str(version)
                 }
@@ -1622,7 +1622,7 @@ class ArgillaDatabase:
                 },
                 metadata={
                     "prompt_id": prompt_id,
-                    "is_active": "True",
+                    "active_status": "true",  # Updated to match renamed property
                     "created_at": datetime.now().isoformat(),
                     "version": str(version)
                 }
@@ -1688,7 +1688,7 @@ class ArgillaDatabase:
                 metadata={
                     "avg_score_metadata": str(avg_score),
                     "rounds_survived": str(rounds_survived),
-                    "is_active": str(is_active).lower()
+                    "active_status": str(is_active).lower()  # Updated to match renamed property
                 }
             )
             
@@ -1747,7 +1747,7 @@ class ArgillaDatabase:
             updated_record = rg.Record(
                 id=record["id"],
                 metadata={
-                    "is_active": str(is_active).lower()
+                    "active_status": str(is_active).lower()  # Updated to match renamed property
                 }
             )
             
@@ -2240,7 +2240,7 @@ class ArgillaDatabase:
                     return []
             
             # Query for active prompts
-            active_filter = rg.Filter(("metadata.is_active", "==", "true"))
+            active_filter = rg.Filter(("metadata.active_status", "==", "true"))  # Updated to match renamed property
             query = rg.Query(filter=active_filter)
             active_prompts = self.datasets["evaluator_prompts"].records(query=query).to_list(flatten=True)
             
@@ -2320,7 +2320,7 @@ class ArgillaDatabase:
                     return []
             
             # Query for active prompts
-            active_filter = rg.Filter(("metadata.is_active", "==", "true"))
+            active_filter = rg.Filter(("metadata.active_status", "==", "true"))  # Updated to match renamed property
             query = rg.Query(filter=active_filter)
             active_prompts = self.datasets["generator_prompts"].records(query=query).to_list(flatten=True)
             
