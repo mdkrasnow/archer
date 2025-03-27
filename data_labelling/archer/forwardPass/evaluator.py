@@ -13,6 +13,7 @@ class AIExpert:
         model_name (str): The name of the LLM to use for evaluation.
         knowledge_base (list): A list of document contents for RAG.
         rubric (dict): Evaluation criteria.
+        current_prompt (str): The currently active evaluator prompt.
     """
     
     def __init__(self, model_name, knowledge_base, rubric):
@@ -28,6 +29,45 @@ class AIExpert:
         self.knowledge_base = knowledge_base
         self.rubric = rubric
         self.llm_call = llm_call
+        self.current_prompt = ""
+        self._set_default_prompt()
+    
+    def _set_default_prompt(self):
+        """Set the default evaluator prompt with placeholders for input and content."""
+        self.current_prompt = f"""
+        You are an expert evaluator. Please evaluate the following generated content 
+        against the provided rubric and input data.
+        
+        Input data: {{input_placeholder}}
+        
+        Generated content: {{content_placeholder}}
+        
+        Rubric: {self.rubric}
+        
+        Please provide:
+        1. A score from 1-5
+        2. Detailed feedback on how to improve
+        3. An example of improved output
+        4. A brief summary of your evaluation
+        """
+    
+    def set_prompt(self, prompt_content):
+        """
+        Set the evaluator prompt.
+        
+        Args:
+            prompt_content (str): New prompt content with placeholders.
+        """
+        self.current_prompt = prompt_content
+    
+    def get_current_prompt(self):
+        """
+        Get the current evaluator prompt.
+        
+        Returns:
+            str: The current evaluator prompt.
+        """
+        return self.current_prompt
     
     def evaluate(self, generated_content, input_data):
         """
@@ -40,23 +80,9 @@ class AIExpert:
         Returns:
             dict: Evaluation results with keys like 'score', 'feedback', etc.
         """
-        # Construct a prompt for evaluation using the rubric
-        eval_prompt = f"""
-        You are an expert evaluator. Please evaluate the following generated content 
-        against the provided rubric and input data.
-        
-        Input data: {input_data}
-        
-        Generated content: {generated_content}
-        
-        Rubric: {self.rubric}
-        
-        Please provide:
-        1. A score from 1-5
-        2. Detailed feedback on how to improve
-        3. An example of improved output
-        4. A brief summary of your evaluation
-        """
+        # Replace placeholders in the current prompt
+        eval_prompt = self.current_prompt.replace("{input_placeholder}", str(input_data))
+        eval_prompt = eval_prompt.replace("{content_placeholder}", generated_content)
         
         # Use the centralized llm_call function
         messages = [{"role": "user", "content": eval_prompt}]

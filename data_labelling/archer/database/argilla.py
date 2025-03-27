@@ -61,7 +61,7 @@ class ArgillaDatabase:
     
     def initialize_datasets(self) -> bool:
         """
-        Initialize all required datasets in Argilla according to the revised schema.
+        Initialize required datasets in Argilla according to the revised schema.
         Creates the datasets if they don't exist.
         
         Returns:
@@ -76,14 +76,8 @@ class ArgillaDatabase:
             # Dictionary to track dataset initialization status
             dataset_creation_results = {}
             
-            # Initialize Records Dataset
+            # Initialize Records Dataset with integrated prompt fields
             dataset_creation_results["records"] = self._initialize_records_dataset()
-            
-            # Initialize Generator Prompts Dataset
-            dataset_creation_results["generator_prompts"] = self._initialize_generator_prompts_dataset()
-            
-            # Initialize Evaluator Prompts Dataset  
-            dataset_creation_results["evaluator_prompts"] = self._initialize_evaluator_prompts_dataset()
             
             # Initialize Rounds Dataset
             dataset_creation_results["rounds"] = self._initialize_rounds_dataset()
@@ -1047,7 +1041,7 @@ class ArgillaDatabase:
     
     def _initialize_records_dataset(self) -> bool:
         """
-        Initialize the Records dataset.
+        Initialize the Records dataset with integrated prompt fields.
         
         Returns:
             bool: True if initialization is successful, False otherwise
@@ -1067,7 +1061,9 @@ class ArgillaDatabase:
                 records_settings = rg.Settings(
                     fields=[
                         rg.TextField(name="input", title="Input Data"),
-                        rg.TextField(name="content", title="Generated Content")
+                        rg.TextField(name="content", title="Generated Content"),
+                        rg.TextField(name="generator_prompt", title="Generator Prompt"),  # New field
+                        rg.TextField(name="evaluator_prompt", title="Evaluator Prompt")   # New field
                     ],
                     questions=[
                         rg.RatingQuestion(
@@ -1114,11 +1110,10 @@ class ArgillaDatabase:
                         )
                     ],
                     metadata=[
-                        rg.TermsMetadataProperty(name="generator_prompt_id", title="Generator Prompt ID"),
-                        rg.TermsMetadataProperty(name="evaluator_prompt_id", title="Evaluator Prompt ID"),
+                        rg.TermsMetadataProperty(name="prompt_generation", title="Prompt Generation"),  # New field
                         rg.TermsMetadataProperty(name="round_id", title="Round ID"),
                         rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
-                        rg.TermsMetadataProperty(name="validated_status", title="Is Validated")  # Renamed from "is_validated" to avoid potential conflict
+                        rg.TermsMetadataProperty(name="validated_status", title="Is Validated")
                     ]
                 )
                 
@@ -1522,17 +1517,18 @@ class ArgillaDatabase:
             return False
     
     def store_record(self, input_data: str, content: str, 
-                     generator_prompt_id: str, evaluator_prompt_id: str, 
-                     round_id: str) -> Optional[str]:
+                   generator_prompt: str, evaluator_prompt: str, 
+                   prompt_generation: int, round_id: str) -> Optional[str]:
         """
-        Store a record in the records dataset.
+        Store a record with integrated prompt information.
         
         Args:
-            input_data: The input data used to generate content
+            input_data: The input data
             content: The generated content
-            generator_prompt_id: ID of the generator prompt used
-            evaluator_prompt_id: ID of the evaluator prompt used
-            round_id: ID of the current round
+            generator_prompt: The actual generator prompt text
+            evaluator_prompt: The actual evaluator prompt text
+            prompt_generation: Generation number of the prompt
+            round_id: Current round ID
             
         Returns:
             str: ID of the stored record, or None if storage failed
@@ -1546,18 +1542,19 @@ class ArgillaDatabase:
             # Create a unique ID for this record
             record_id = str(uuid.uuid4())
             
-            # Create a record with properly structured data
+            # Create a record with the updated structure
             record = rg.Record(
                 fields={
                     "input": input_data,
-                    "content": content
+                    "content": content,
+                    "generator_prompt": generator_prompt,
+                    "evaluator_prompt": evaluator_prompt
                 },
                 metadata={
-                    "generator_prompt_id": generator_prompt_id,
-                    "evaluator_prompt_id": evaluator_prompt_id,
+                    "prompt_generation": prompt_generation,
                     "round_id": round_id,
                     "timestamp": datetime.now().isoformat(),
-                    "validated_status": "False"  # Updated to match renamed property
+                    "validated_status": "False"
                 }
             )
             
@@ -2614,3 +2611,84 @@ class ArgillaDatabase:
         except Exception as e:
             logger.error(f"Error getting prompt lineage: {str(e)}")
             return None
+    
+    def get_prompts_from_records(self, prompt_type: str = "generator", 
+                            generations: List[int] = None, 
+                            top_n: int = 4) -> List[Dict[str, Any]]:
+        """
+        Retrieve prompts directly from the records dataset.
+        
+        Args:
+            prompt_type: Type of prompt to retrieve ("generator" or "evaluator")
+            generations: List of specific generations to filter by
+            top_n: Number of top performing prompts to return
+        
+        Returns:
+            List of dictionaries containing prompt information
+        """
+        try:
+            if not self.client or "records" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return []
+            
+            # Determine which field to extract based on prompt type
+            prompt_field = "generator_prompt" if prompt_type == "generator" else "evaluator_prompt"
+            
+            # Prepare search filters based on generations
+            filters = {}
+            if generations:
+                # Convert generations to strings for metadata matching
+                gen_strings = [str(g) for g in generations]
+                filters["prompt_generation"] = {"$in": gen_strings}
+            
+            # Search for records
+            results = self.datasets["records"].records.search(
+                query="*",  # Match all records
+                filters=filters,
+                limit=100   # Get a reasonable number of records
+            )
+            
+            # Process results to extract prompts, avoiding duplicates
+            prompts_seen = set()
+            prompts = []
+            
+            for record in results:
+                try:
+                    # Extract prompt content and metadata
+                    prompt_content = record.fields.get(prompt_field, "")
+                    
+                    # Skip if we've already seen this prompt
+                    if prompt_content in prompts_seen:
+                        continue
+                    
+                    # Extract generation and other metadata
+                    generation = int(record.metadata.get("prompt_generation", 0))
+                    round_id = record.metadata.get("round_id", "")
+                    timestamp = record.metadata.get("timestamp", "")
+                    
+                    # Calculate average score from questions if available
+                    score = 0.0
+                    if hasattr(record, 'questions') and 'ai_score' in record.questions:
+                        score = float(record.questions.get('ai_score', 0))
+                    
+                    # Add to list of unique prompts
+                    prompts_seen.add(prompt_content)
+                    prompts.append({
+                        'content': prompt_content,
+                        'generation': generation,
+                        'score': score,
+                        'round_id': round_id,
+                        'timestamp': timestamp
+                    })
+                except Exception as e:
+                    logger.error(f"Error processing record: {str(e)}")
+                    continue
+            
+            # Sort prompts by score (descending) and limit to top_n
+            prompts.sort(key=lambda x: x['score'], reverse=True)
+            return prompts[:top_n]
+            
+        except Exception as e:
+            logger.error(f"Error retrieving prompts from records: {str(e)}")
+            return []

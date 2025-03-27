@@ -671,7 +671,7 @@ class PromptOptimizer:
     
     def optimize_model_with_evaluation(self, model, feedback_map, score_map, input_data, prompt_evaluator):
         """
-        Optimize prompts in a Model instance using AdaLFlow and evaluate the results.
+        Optimize prompts in a Model instance using the integrated prompt structure.
         
         Args:
             model: The Model object containing prompts to optimize.
@@ -683,11 +683,11 @@ class PromptOptimizer:
         Returns:
             List of best performing Prompt objects after optimization and evaluation.
         """
-        # Step 1: Optimize the model using AdaLFlow
+        # Step 1: Optimize the model's prompts directly
         if model.adalflow_enabled and self.adalflow_enabled:
             optimized = self.optimize_model(model, feedback_map, score_map)
             if not optimized:
-                # If AdaLFlow optimization failed, generate variants using standard approach
+                # If AdaLFlow optimization failed, use standard approach
                 variant_prompts = []
                 for prompt_id, prompt in model.prompts.items():
                     improved_content = self.optimize_prompt(

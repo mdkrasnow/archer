@@ -179,14 +179,17 @@ class Archer:
         )
         
         # Initialize database if config is provided
-        # if database_config:
-        #     self.database = ArgillaDB(**database_config)
-        # else:
-        #     self.database = None
+        if database_config:
+            from archer.database.argilla import ArgillaDatabase
+            self.database = ArgillaDatabase(**database_config)
+            self.database.connect()
+            self.database.initialize_datasets()
+        else:
+            self.database = None
 
-        # Set the active prompts in the generator
-        self.active_prompts = initial_prompts
-        self.generator.set_prompts(self.active_prompts)
+        # Store the active prompts in the generator
+        self.active_generator_prompts = initial_prompts  # Store prompts directly
+        self.generator.set_prompts(self.active_generator_prompts)
 
         self.generation_count = 0
         
@@ -219,7 +222,7 @@ class Archer:
             input_rows = [input_data]
         
         # Limit the number of active prompts per cycle
-        active_prompts = self.active_prompts[:self.max_prompts_per_cycle]
+        active_prompts = self.active_generator_prompts[:self.max_prompts_per_cycle]
         self.generator.set_prompts(active_prompts)
         
         all_evaluations = []
@@ -244,112 +247,76 @@ class Archer:
                 
                 all_evaluations.append((prompt, content, eval_result))
 
+                # Store record with integrated prompt information if database is available
+                if self.database:
+                    self.database.store_record(
+                        input_data=str(input_row),
+                        content=content,
+                        generator_prompt=prompt.content,
+                        evaluator_prompt=self.evaluator.get_current_prompt(),
+                        prompt_generation=prompt.generation,
+                        round_id=str(self.generation_count)
+                    )
+
         self.performance_tracker.record_generation(self.generation_count, active_prompts)
         
-        # Store evaluations in database if available
-        # if hasattr(self, 'database') and self.database:
-        #     self.database.save_evaluations(self.generation_count, all_evaluations)
-            
+        # Increment generation counter
+        self.generation_count += 1
+        
         return all_evaluations
 
     def run_backward_pass(self, evaluations: list) -> None:
         """
-        Runs the backward pass: optimizes each prompt using the evaluation feedback.
-        Updates the prompt content and score, then sets the new prompts for the next cycle.
+        Runs the backward pass: optimizes prompts based on generation evaluations.
 
         Args:
-            evaluations: List of tuples (Prompt, generated content, evaluation dict).
+            evaluations: List of tuples (Prompt, generated content, evaluation result dict).
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info("=== STARTING BACKWARD PASS ===")
-        logger.info(f"Number of evaluations received: {len(evaluations)}")
+        # Extract prompts and evaluation data for optimization
+        prompts = [eval_item[0] for eval_item in evaluations]
+        feedback_map = {str(i): eval_item[2].get('feedback', '') for i, eval_item in enumerate(evaluations)}
+        score_map = {str(i): eval_item[2].get('score', 0.0) for i, eval_item in enumerate(evaluations)}
         
-        # Check if we have evaluations to process
-        if not evaluations:
-            logger.warning("No evaluations provided for backward pass - aborting")
-            return
-            
-        # Log the evaluations structure
-        for i, (prompt, content, eval_result) in enumerate(evaluations):
-            logger.info(f"Evaluation {i+1}:")
-            logger.info(f"  Prompt: {prompt.content[:50]}...")
-            logger.info(f"  Content: {content[:50]}..." if content else "  Content: None")
-            logger.info(f"  Score: {eval_result.get('score', 'N/A')}")
-            logger.debug(f"  Evaluation details: {eval_result}")
-        
-        # Create maps for feedback and scores
-        feedback_map = {}
-        score_map = {}
-        
-        # Extract feedback and scores from evaluations
-        logger.info("Extracting feedback and scores from evaluations")
-        for i, (prompt, generated_content, eval_result) in enumerate(evaluations):
-            prompt_id = str(i)
-            feedback = eval_result.get('feedback', '')
-            score = eval_result.get('score', 0)
-            
-            feedback_map[prompt_id] = feedback
-            score_map[prompt_id] = score
-            
-            logger.debug(f"Mapped prompt {i} to score={score}")
-        
-        # Get the prompts from evaluations
-        prompts = [prompt for prompt, _, _ in evaluations]
-        logger.info(f"Extracted {len(prompts)} prompts for optimization")
-        
-        # Run optimization
-        logger.info("Running prompt optimization")
-        try:
-            # Option 1: Optimize with AdaLFlow
-            if self.adalflow_enabled and hasattr(self, 'generator') and hasattr(self.generator, 'model'):
-                logger.info("Using AdaLFlow model optimization")
-                try:
-                    model = self.generator.model
-                    success = self.optimizer.optimize_model(model, feedback_map, score_map)
-                    
-                    if not success:
-                        logger.warning("AdaLFlow model optimization failed")
-                        # Fall back to regular optimization
-                        logger.info("Falling back to regular optimization")
-                        new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
-                        self.active_prompts = new_prompts
-                        self.generator.set_prompts(new_prompts)
-                    else:
-                        logger.info("AdaLFlow model optimization successful")
-                        # Update active prompts from the model's prompts
-                        self.active_prompts = list(model.prompts.values())
-                except Exception as e:
-                    logger.error(f"Error in AdaLFlow optimization: {str(e)}")
-                    # Fall back to regular optimization
-                    logger.info("Exception occurred. Falling back to regular optimization")
+        # Optimize prompts using the proper optimizer approach
+        if self.adalflow_enabled:
+            try:
+                # AdaLFlow-based optimization with detailed gradients
+                model = self._build_adalflow_model_from_prompts(prompts)
+                optimization_successful = self.optimizer.optimize_model(model, feedback_map, score_map)
+                if not optimization_successful:
+                    logger.info("Falling back to regular optimization")
                     new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
-                    self.active_prompts = new_prompts
+                    self.active_generator_prompts = new_prompts
                     self.generator.set_prompts(new_prompts)
-            else:
-                # Option 2: Regular optimization
-                logger.info("Using regular prompt optimization")
+                else:
+                    logger.info("AdaLFlow model optimization successful")
+                    # Update active prompts from the model's prompts
+                    self.active_generator_prompts = list(model.prompts.values())
+            except Exception as e:
+                logger.error(f"Error in AdaLFlow optimization: {str(e)}")
+                # Fall back to regular optimization
+                logger.info("Exception occurred. Falling back to regular optimization")
                 new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
-                
-                # Update active prompts
-                logger.info(f"Optimization complete. Got {len(new_prompts)} new prompts")
-                self.active_prompts = new_prompts
+                self.active_generator_prompts = new_prompts
                 self.generator.set_prompts(new_prompts)
+        else:
+            # Standard optimization
+            new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
             
-            logger.info("Backward pass completed successfully")
-            
-            # Log the new active prompts
-            logger.info("New active prompts:")
-            for i, prompt in enumerate(self.active_prompts):
-                logger.info(f"  Prompt {i+1}: {prompt.content[:50]}...")
-                logger.debug(f"  Full content: {prompt.content}")
-                
-            # Increment generation count
-            self.generation_count += 1
-            logger.info(f"Generation count increased to {self.generation_count}")
-            
-        except Exception as e:
-            logger.error(f"Critical error in backward pass: {str(e)}", exc_info=True)
+            # Update the active prompts with the optimized ones
+            best_prompts = self._evaluate_and_select_best_prompts(new_prompts)
+            self.active_generator_prompts = best_prompts
+            self.generator.set_prompts(best_prompts)
+        
+        # Update performance tracking
+        self.performance_tracker.update_prompt_performance(prompts, evaluations)
+        
+        # Store optimized prompts in the database if available
+        if self.database:
+            for prompt in self.active_generator_prompts:
+                # The prompts are already stored in records, no need for separate storage
+                # We can update lineage information if needed
+                pass
 
     def _generate_prompt_variants(self, base_prompts: List[Prompt]) -> List[Prompt]:
         """
@@ -461,15 +428,18 @@ class Archer:
         # For now, return placeholder inputs
         return ["Evaluation input sample"] * count
 
-    def _select_top_prompts(self) -> List[Prompt]:
+    def _select_top_prompts(self, prompts: List[Prompt]) -> List[Prompt]:
         """
         Select the top-performing prompts based on their scores.
         
+        Args:
+            prompts: List of Prompt objects to evaluate.
+            
         Returns:
             List of the best-performing Prompt objects.
         """
         # Sort prompts by score in descending order
-        sorted_prompts = sorted(self.candidate_prompts, key=lambda p: p.score, reverse=True)
+        sorted_prompts = sorted(prompts, key=lambda p: p.score, reverse=True)
         
         # Calculate how many prompts to keep
         keep_count = max(
@@ -479,6 +449,50 @@ class Archer:
         
         # Return the top prompts
         return sorted_prompts[:keep_count]
+
+    def _evaluate_and_select_best_prompts(self, prompts: List[Prompt]) -> List[Prompt]:
+        """
+        Evaluates prompts and selects the best performing ones using the PromptEvaluator.
+        
+        This is a simplified version of the prompt evaluation and selection process,
+        which delegates to the PromptEvaluator for both evaluation and selection.
+        
+        Args:
+            prompts: List of Prompt objects to evaluate.
+            
+        Returns:
+            List of the best performing Prompt objects.
+        """
+        if not hasattr(self, 'prompt_evaluator') or not self.prompt_evaluator:
+            # Fallback to old method if prompt_evaluator is not available
+            self.candidate_prompts = prompts
+            self._evaluate_prompt_candidates(skip_scored_prompts=True)
+            return self._select_top_prompts(prompts)
+            
+        # Generate sample input data for evaluation
+        eval_inputs = self._generate_evaluation_inputs(self.validation_attempts_per_param)
+        
+        # Use the prompt_evaluator to evaluate and select the best prompts in one step
+        return self.prompt_evaluator.evaluate_and_select_best(
+            prompts=prompts,
+            input_data=eval_inputs,
+            num_simulations=self.validation_attempts_per_param,
+            quantile=self.top_params_percentile
+        )
+
+    def _build_adalflow_model_from_prompts(self, prompts: List[Prompt]) -> Any:
+        """
+        Builds a model from a list of prompts.
+        
+        Args:
+            prompts: List of Prompt objects to use for model building.
+            
+        Returns:
+            Built model.
+        """
+        # This method should be implemented based on the specific model building logic
+        # For now, we'll return a placeholder model
+        return None
 
     def run_training_cycle(self, input_data: Any) -> list:
         """
@@ -509,7 +523,7 @@ class Archer:
             evaluations = self.run_training_cycle(input_data)
             
             # Print summary of this cycle
-            print(f"Active prompts: {len(self.active_prompts)}")
+            print(f"Active prompts: {len(self.active_generator_prompts)}")
             print(f"Candidate prompts evaluated: {len(self.candidate_prompts)}")
             
             for prompt, content, eval_result in evaluations:
@@ -517,33 +531,3 @@ class Archer:
                 print(f"Feedback: {eval_result.get('feedback', 'N/A')}\n")
         
         # Visualization of performance can be added here if desired.
-
-    def _evaluate_and_select_best_prompts(self, prompts: List[Prompt]) -> List[Prompt]:
-        """
-        Evaluates prompts and selects the best performing ones using the PromptEvaluator.
-        
-        This is a simplified version of the prompt evaluation and selection process,
-        which delegates to the PromptEvaluator for both evaluation and selection.
-        
-        Args:
-            prompts: List of Prompt objects to evaluate.
-            
-        Returns:
-            List of the best performing Prompt objects.
-        """
-        if not hasattr(self, 'prompt_evaluator') or not self.prompt_evaluator:
-            # Fallback to old method if prompt_evaluator is not available
-            self.candidate_prompts = prompts
-            self._evaluate_prompt_candidates(skip_scored_prompts=True)
-            return self._select_top_prompts()
-            
-        # Generate sample input data for evaluation
-        eval_inputs = self._generate_evaluation_inputs(self.validation_attempts_per_param)
-        
-        # Use the prompt_evaluator to evaluate and select the best prompts in one step
-        return self.prompt_evaluator.evaluate_and_select_best(
-            prompts=prompts,
-            input_data=eval_inputs,
-            num_simulations=self.validation_attempts_per_param,
-            quantile=self.top_params_percentile
-        )
