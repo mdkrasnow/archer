@@ -1064,7 +1064,7 @@ class ArgillaDatabase:
                             values=[1, 2, 3, 4, 5],
                             title="Average Score",
                             description="Average performance score of this prompt",
-                            required=False
+                            required=True
                         ),
                         rg.LabelQuestion(
                             name="survived",
@@ -1131,7 +1131,7 @@ class ArgillaDatabase:
                             labels={"TRUE": "Yes", "FALSE": "No"},
                             title="Is Active",
                             description="Whether this evaluator prompt is currently active",
-                            required=False
+                            required=True
                         ),
                         rg.TextQuestion(
                             name="notes",
@@ -1203,7 +1203,7 @@ class ArgillaDatabase:
                             values=[1, 2, 3, 4, 5],
                             title="Overall Performance",
                             description="Overall performance rating of this round",
-                            required=False
+                            required=True
                         )
                     ],
                     metadata=[
@@ -1267,7 +1267,7 @@ class ArgillaDatabase:
                             values=[1, 2, 3, 4, 5],
                             title="Improvement Rating",
                             description="Rating of the improvement from parent to child prompt",
-                            required=False
+                            required=True
                         )
                     ],
                     metadata=[
