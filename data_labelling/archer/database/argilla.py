@@ -61,11 +61,10 @@ class ArgillaDatabase:
     
     def initialize_datasets(self) -> bool:
         """
-        Initialize required datasets in Argilla according to the revised schema.
-        Creates the datasets if they don't exist.
+        Initialize all datasets required for the application.
         
         Returns:
-            bool: True if initialization is successful, False otherwise
+            bool: True if all datasets were initialized successfully, False otherwise
         """
         try:
             if not self.client:
@@ -73,38 +72,81 @@ class ArgillaDatabase:
                 if not success:
                     return False
             
-            # Dictionary to track dataset initialization status
-            dataset_creation_results = {}
+            # Check which datasets already exist
+            existing_datasets = {ds.name: ds for ds in self.client.list_datasets()}
+            self.datasets = {}
             
-            # Initialize Records Dataset with integrated prompt fields
-            dataset_creation_results["records"] = self._initialize_records_dataset()
+            # Initialize all required datasets
+            failed_datasets = []
             
-            # Initialize Generator Prompts Dataset
-            dataset_creation_results["generator_prompts"] = self._initialize_generator_prompts_dataset()
+            # Records dataset
+            if "archer_records" in existing_datasets:
+                logger.info("Using existing records dataset")
+                self.datasets["records"] = existing_datasets["archer_records"]
+            else:
+                success = self._initialize_records_dataset()
+                if not success:
+                    failed_datasets.append("records")
             
-            # Initialize Evaluator Prompts Dataset
-            dataset_creation_results["evaluator_prompts"] = self._initialize_evaluator_prompts_dataset()
+            # Generator prompts dataset
+            if "archer_generator_prompts" in existing_datasets:
+                logger.info("Using existing generator prompts dataset")
+                self.datasets["generator_prompts"] = existing_datasets["archer_generator_prompts"]
+            else:
+                success = self._initialize_generator_prompts_dataset()
+                if not success:
+                    failed_datasets.append("generator_prompts")
             
-            # Initialize Rounds Dataset
-            dataset_creation_results["rounds"] = self._initialize_rounds_dataset()
+            # Evaluator prompts dataset
+            if "archer_evaluator_prompts" in existing_datasets:
+                logger.info("Using existing evaluator prompts dataset")
+                self.datasets["evaluator_prompts"] = existing_datasets["archer_evaluator_prompts"]
+            else:
+                success = self._initialize_evaluator_prompts_dataset()
+                if not success:
+                    failed_datasets.append("evaluator_prompts")
             
-            # Initialize Prompt Lineage Dataset
-            dataset_creation_results["prompt_lineage"] = self._initialize_prompt_lineage_dataset()
-
-            # Initialize Outputs Dataset
-            dataset_creation_results["outputs"] = self._initialize_outputs_dataset()
-
-            # Initialize Evaluations Dataset
-            dataset_creation_results["evaluations"] = self._initialize_evaluations_dataset()
+            # Rounds dataset
+            if "archer_rounds" in existing_datasets:
+                logger.info("Using existing rounds dataset")
+                self.datasets["rounds"] = existing_datasets["archer_rounds"]
+            else:
+                success = self._initialize_rounds_dataset()
+                if not success:
+                    failed_datasets.append("rounds")
             
-            # Check if all datasets were initialized successfully
-            if not all(dataset_creation_results.values()):
+            # Prompt lineage dataset
+            if "archer_prompt_lineage" in existing_datasets:
+                logger.info("Using existing prompt lineage dataset")
+                self.datasets["prompt_lineage"] = existing_datasets["archer_prompt_lineage"]
+            else:
+                success = self._initialize_prompt_lineage_dataset()
+                if not success:
+                    failed_datasets.append("prompt_lineage")
+            
+            # Outputs dataset
+            if "archer_outputs" in existing_datasets:
+                logger.info("Using existing outputs dataset")
+                self.datasets["outputs"] = existing_datasets["archer_outputs"]
+            else:
+                success = self._initialize_outputs_dataset()
+                if not success:
+                    failed_datasets.append("outputs")
+            
+            # Evaluations dataset
+            if "archer_evaluations" in existing_datasets:
+                logger.info("Using existing evaluations dataset")
+                self.datasets["evaluations"] = existing_datasets["archer_evaluations"]
+            else:
+                success = self._initialize_evaluations_dataset()
+                if not success:
+                    failed_datasets.append("evaluations")
+            
+            if failed_datasets:
                 logger.error("Not all datasets were properly initialized")
-                failed_datasets = [k for k, v in dataset_creation_results.items() if not v]
                 logger.error(f"Failed datasets: {', '.join(failed_datasets)}")
                 return False
             
-            logger.info("All datasets initialized successfully")
             return True
             
         except Exception as e:
@@ -365,7 +407,7 @@ class ArgillaDatabase:
             model: The model the prompt is for
             purpose: The purpose of the prompt
             parent_prompt_id: ID of the parent prompt (if any)
-            generation: Generation number
+            generation: Generation number of the prompt
             
         Returns:
             str: ID of the stored prompt, or None if storage failed
@@ -1111,94 +1153,68 @@ class ArgillaDatabase:
     
     def _initialize_records_dataset(self) -> bool:
         """
-        Initialize the Records dataset with integrated prompt fields.
+        Initialize the records dataset.
         
         Returns:
-            bool: True if initialization is successful, False otherwise
+            bool: True if initialization was successful, False otherwise
         """
         try:
-            # Check if dataset exists
+            if not self.client:
+                success = self.connect()
+                if not success:
+                    return False
+            
+            # Check if the dataset already exists
             try:
-                # Fix: Use get_dataset instead of datasets()
-                records_dataset = self.client.get_dataset("archer_records")
-                if records_dataset is not None:
-                    self.datasets["records"] = records_dataset
-                    logger.info("Found existing records dataset")
-                    return True
-                else:
-                    raise Exception("Dataset returned is None")
-            except Exception as e:
-                logger.info(f"Creating new records dataset: {str(e)}")
-                records_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="input", title="Input Data"),
-                        rg.TextField(name="content", title="Generated Content"),
-                        rg.TextField(name="generator_prompt", title="Generator Prompt"),  # New field
-                        rg.TextField(name="evaluator_prompt", title="Evaluator Prompt")   # New field
-                    ],
-                    questions=[
-                        rg.RatingQuestion(
-                            name="ai_score",
-                            values=[1, 2, 3, 4, 5],
-                            title="AI Quality Score",
-                            description="AI-generated quality score",
-                            required=True
-                        ),
-                        rg.TextQuestion(
-                            name="ai_feedback",
-                            title="AI Feedback",
-                            description="AI-generated feedback",
-                            required=True,
-                            use_markdown=True
-                        ),
-                        rg.TextQuestion(
-                            name="ai_improved_output",
-                            title="AI Improved Output",
-                            description="AI-suggested improved version",
-                            required=True,
-                            use_markdown=True
-                        ),
-                        rg.RatingQuestion(
-                            name="human_score",
-                            values=[1, 2, 3, 4, 5],
-                            title="Human Quality Score",
-                            description="Human-generated quality score",
-                            required=False
-                        ),
-                        rg.TextQuestion(
-                            name="human_feedback",
-                            title="Human Feedback",
-                            description="Human-generated feedback",
-                            required=False,
-                            use_markdown=True
-                        ),
-                        rg.TextQuestion(
-                            name="human_improved_output",
-                            title="Human Improved Output",
-                            description="Human-suggested improved version",
-                            required=False,
-                            use_markdown=True
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="prompt_generation", title="Prompt Generation"),  # New field
-                        rg.TermsMetadataProperty(name="round_id", title="Round ID"),
-                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
-                        rg.TermsMetadataProperty(name="validated_status", title="Is Validated")
-                    ]
+                existing_dataset = self.client.get_dataset("archer_records")
+                self.datasets["records"] = existing_dataset
+                logger.info("Using existing records dataset")
+                return True
+            except Exception:
+                # Dataset doesn't exist, create it
+                pass
+            
+            # Create dataset definitions
+            fields = [
+                rg.TextField(name="input_data", title="Input Data"),
+                rg.TextField(name="content", title="Generated Content"),
+                rg.TextField(name="generator_prompt", title="Generator Prompt Used"),
+                rg.TextField(name="evaluator_prompt", title="Evaluator Prompt Used"),
+                rg.NumberField(name="prompt_generation", title="Prompt Generation"),
+                rg.TextField(name="round_id", title="Round ID"),
+                rg.NumberField(name="ai_score", title="AI Score"),
+                rg.TextField(name="ai_feedback", title="AI Feedback"),
+                rg.TextField(name="ai_improved_output", title="AI Improved Output"),
+                rg.NumberField(name="human_score", title="Human Score", required=False),
+                rg.TextField(name="human_feedback", title="Human Feedback", required=False),
+                rg.TextField(name="human_improved_output", title="Human Improved Output", required=False),
+            ]
+            
+            metadata_properties = {
+                "record_id": {"type": "string"},
+                "created_at": {"type": "string", "format": "date-time"},
+                "updated_at": {"type": "string", "format": "date-time"},
+            }
+            
+            vectors_settings = {}
+            
+            # Create the dataset
+            try:
+                records_dataset = self.client.create_dataset(
+                    name="archer_records",
+                    fields=fields,
+                    metadata_properties=metadata_properties,
+                    vectors_settings=vectors_settings,
+                    description="Records of input data, generated content, and evaluations"
                 )
                 
-                logger.info("Creating archer_records dataset...")
-                new_dataset = rg.Dataset(name="archer_records", settings=records_settings)
-                new_dataset.create()
-                
-                # Verify creation worked by fetching again with the correct method
-                self.datasets["records"] = self.client.get_dataset("archer_records")
-                if self.datasets["records"] is None:
-                    raise Exception("Failed to create archer_records dataset")
-                
-                logger.info("Created new records dataset")
+                self.datasets["records"] = records_dataset
+                logger.info("Records dataset initialized successfully")
                 return True
+                
+            except Exception as e:
+                logger.error(f"Error initializing records dataset: {str(e)}")
+                return False
                 
         except Exception as e:
             logger.error(f"Error initializing records dataset: {str(e)}")
@@ -1206,67 +1222,62 @@ class ArgillaDatabase:
     
     def _initialize_generator_prompts_dataset(self) -> bool:
         """
-        Initialize the Generator Prompts dataset.
+        Initialize the generator prompts dataset.
         
         Returns:
-            bool: True if initialization is successful, False otherwise
+            bool: True if initialization was successful, False otherwise
         """
         try:
-            # Check if dataset exists
+            if not self.client:
+                success = self.connect()
+                if not success:
+                    return False
+            
+            # Check if the dataset already exists
             try:
-                # Fix: Use get_dataset instead of datasets()
-                prompts_dataset = self.client.get_dataset("archer_generator_prompts")
-                if prompts_dataset is not None:
-                    self.datasets["generator_prompts"] = prompts_dataset
-                    logger.info("Found existing generator prompts dataset")
-                    return True
-                else:
-                    raise Exception("Dataset returned is None")
-            except Exception as e:
-                logger.info(f"Creating new generator prompts dataset: {str(e)}")
-                prompts_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="content", title="Prompt Content")
-                    ],
-                    questions=[
-                        # Add at least one question to satisfy Argilla requirements
-                        rg.RatingQuestion(
-                            name="average_score", 
-                            values=[1, 2, 3, 4, 5],
-                            title="Average Score",
-                            description="Average performance score of this prompt",
-                            required=True
-                        ),
-                        rg.LabelQuestion(
-                            name="survived",
-                            labels={"TRUE": "Yes", "FALSE": "No"},
-                            title="Survived",
-                            description="Whether this prompt survived to the next round",
-                            required=False
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
-                        rg.TermsMetadataProperty(name="avg_score_metadata", title="Average Score"),
-                        rg.TermsMetadataProperty(name="rounds_survived", title="Rounds Survived"),
-                        rg.TermsMetadataProperty(name="active_status", title="Is Active"),  # Renamed from "is_active" to avoid potential conflict
-                        rg.TermsMetadataProperty(name="created_at", title="Created At"),
-                        rg.TermsMetadataProperty(name="version", title="Version")
-                    ]
+                existing_dataset = self.client.get_dataset("archer_generator_prompts")
+                self.datasets["generator_prompts"] = existing_dataset
+                logger.info("Using existing generator prompts dataset")
+                return True
+            except Exception:
+                # Dataset doesn't exist, create it
+                pass
+            
+            # Create dataset definitions
+            fields = [
+                rg.TextField(name="content", title="Prompt Content"),
+                rg.TextField(name="parent_prompt_id", title="Parent Prompt ID", required=False),
+                rg.NumberField(name="version", title="Version Number"),
+                rg.NumberField(name="average_score", title="Average Performance Score", required=False),
+                rg.NumberField(name="rounds_survived", title="Number of Rounds Survived", required=False),
+                rg.BooleanField(name="is_active", title="Is Active", required=False),
+            ]
+            
+            metadata_properties = {
+                "prompt_id": {"type": "string"},
+                "created_at": {"type": "string", "format": "date-time"},
+                "updated_at": {"type": "string", "format": "date-time"},
+            }
+            
+            vectors_settings = {}
+            
+            # Create the dataset
+            try:
+                prompts_dataset = self.client.create_dataset(
+                    name="archer_generator_prompts",
+                    fields=fields,
+                    metadata_properties=metadata_properties,
+                    vectors_settings=vectors_settings,
+                    description="Generator prompts used for content generation"
                 )
                 
-                logger.info("Creating archer_generator_prompts dataset...")
-                new_dataset = rg.Dataset(name="archer_generator_prompts", settings=prompts_settings)
-                new_dataset.create()
-                
-                # Verify creation worked by fetching again with the correct method
-                self.datasets["generator_prompts"] = self.client.get_dataset("archer_generator_prompts")
-                if self.datasets["generator_prompts"] is None:
-                    raise Exception("Failed to create archer_generator_prompts dataset")
-                
-                logger.info("Created new generator prompts dataset")
+                self.datasets["generator_prompts"] = prompts_dataset
+                logger.info("Generator prompts dataset initialized successfully")
                 return True
+                
+            except Exception as e:
+                logger.error(f"Error initializing generator prompts dataset: {str(e)}")
+                return False
                 
         except Exception as e:
             logger.error(f"Error initializing generator prompts dataset: {str(e)}")
@@ -1274,64 +1285,59 @@ class ArgillaDatabase:
     
     def _initialize_evaluator_prompts_dataset(self) -> bool:
         """
-        Initialize the Evaluator Prompts dataset.
+        Initialize the evaluator prompts dataset.
         
         Returns:
-            bool: True if initialization is successful, False otherwise
+            bool: True if initialization was successful, False otherwise
         """
         try:
-            # Check if dataset exists
+            if not self.client:
+                success = self.connect()
+                if not success:
+                    return False
+            
+            # Check if the dataset already exists
             try:
-                # Fix: Use get_dataset instead of datasets()
-                prompts_dataset = self.client.get_dataset("archer_evaluator_prompts")
-                if prompts_dataset is not None:
-                    self.datasets["evaluator_prompts"] = prompts_dataset
-                    logger.info("Found existing evaluator prompts dataset")
-                    return True
-                else:
-                    raise Exception("Dataset returned is None")
-            except Exception as e:
-                logger.info(f"Creating new evaluator prompts dataset: {str(e)}")
-                prompts_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="content", title="Prompt Content")
-                    ],
-                    questions=[
-                        # Add questions to satisfy Argilla requirements
-                        rg.LabelQuestion(
-                            name="is_active",
-                            labels={"TRUE": "Yes", "FALSE": "No"},
-                            title="Is Active",
-                            description="Whether this evaluator prompt is currently active",
-                            required=True
-                        ),
-                        rg.TextQuestion(
-                            name="notes",
-                            title="Notes",
-                            description="Additional notes about this evaluator prompt",
-                            required=False,
-                            use_markdown=True
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="active_status", title="Is Active"),  # Renamed from "is_active" to avoid conflict
-                        rg.TermsMetadataProperty(name="created_at", title="Created At"),
-                        rg.TermsMetadataProperty(name="version", title="Version")
-                    ]
+                existing_dataset = self.client.get_dataset("archer_evaluator_prompts")
+                self.datasets["evaluator_prompts"] = existing_dataset
+                logger.info("Using existing evaluator prompts dataset")
+                return True
+            except Exception:
+                # Dataset doesn't exist, create it
+                pass
+            
+            # Create dataset definitions
+            fields = [
+                rg.TextField(name="content", title="Prompt Content"),
+                rg.NumberField(name="version", title="Version Number"),
+                rg.BooleanField(name="is_active", title="Is Active", required=False),
+            ]
+            
+            metadata_properties = {
+                "prompt_id": {"type": "string"},
+                "created_at": {"type": "string", "format": "date-time"},
+                "updated_at": {"type": "string", "format": "date-time"},
+            }
+            
+            vectors_settings = {}
+            
+            # Create the dataset
+            try:
+                prompts_dataset = self.client.create_dataset(
+                    name="archer_evaluator_prompts",
+                    fields=fields,
+                    metadata_properties=metadata_properties,
+                    vectors_settings=vectors_settings,
+                    description="Evaluator prompts used for content evaluation"
                 )
                 
-                logger.info("Creating archer_evaluator_prompts dataset...")
-                new_dataset = rg.Dataset(name="archer_evaluator_prompts", settings=prompts_settings)
-                new_dataset.create()
-                
-                # Verify creation worked by fetching again with the correct method
-                self.datasets["evaluator_prompts"] = self.client.get_dataset("archer_evaluator_prompts")
-                if self.datasets["evaluator_prompts"] is None:
-                    raise Exception("Failed to create archer_evaluator_prompts dataset")
-                
-                logger.info("Created new evaluator prompts dataset")
+                self.datasets["evaluator_prompts"] = prompts_dataset
+                logger.info("Evaluator prompts dataset initialized successfully")
                 return True
+                
+            except Exception as e:
+                logger.error(f"Error initializing evaluator prompts dataset: {str(e)}")
+                return False
                 
         except Exception as e:
             logger.error(f"Error initializing evaluator prompts dataset: {str(e)}")
@@ -1339,65 +1345,59 @@ class ArgillaDatabase:
     
     def _initialize_rounds_dataset(self) -> bool:
         """
-        Initialize the Rounds dataset.
+        Initialize the rounds dataset.
         
         Returns:
-            bool: True if initialization is successful, False otherwise
+            bool: True if initialization was successful, False otherwise
         """
         try:
-            # Check if dataset exists
+            if not self.client:
+                success = self.connect()
+                if not success:
+                    return False
+            
+            # Check if the dataset already exists
             try:
-                # Fix: Use get_dataset instead of datasets()
-                rounds_dataset = self.client.get_dataset("archer_rounds")
-                if rounds_dataset is not None:
-                    self.datasets["rounds"] = rounds_dataset
-                    logger.info("Found existing rounds dataset")
-                    return True
-                else:
-                    raise Exception("Dataset returned is None")
-            except Exception as e:
-                logger.info(f"Creating new rounds dataset: {str(e)}")
-                rounds_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="number", title="Round Number"),
-                        rg.TextField(name="status", title="Status")
-                    ],
-                    questions=[
-                        # Add questions to satisfy Argilla requirements
-                        rg.TextQuestion(
-                            name="metrics_summary",
-                            title="Metrics Summary",
-                            description="Summary of round performance metrics",
-                            required=False,
-                            use_markdown=True
-                        ),
-                        rg.RatingQuestion(
-                            name="overall_performance",
-                            values=[1, 2, 3, 4, 5],
-                            title="Overall Performance",
-                            description="Overall performance rating of this round",
-                            required=True
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="round_id", title="Round ID"),
-                        rg.TermsMetadataProperty(name="start_time", title="Start Time"),
-                        rg.TermsMetadataProperty(name="end_time", title="End Time"),
-                        rg.TermsMetadataProperty(name="metrics", title="Metrics")
-                    ]
+                existing_dataset = self.client.get_dataset("archer_rounds")
+                self.datasets["rounds"] = existing_dataset
+                logger.info("Using existing rounds dataset")
+                return True
+            except Exception:
+                # Dataset doesn't exist, create it
+                pass
+            
+            # Create dataset definitions
+            fields = [
+                rg.NumberField(name="round_number", title="Round Number"),
+                rg.TextField(name="status", title="Round Status"),
+                rg.TextField(name="metrics", title="Round Metrics", required=False),
+            ]
+            
+            metadata_properties = {
+                "round_id": {"type": "string"},
+                "created_at": {"type": "string", "format": "date-time"},
+                "updated_at": {"type": "string", "format": "date-time"},
+            }
+            
+            vectors_settings = {}
+            
+            # Create the dataset
+            try:
+                rounds_dataset = self.client.create_dataset(
+                    name="archer_rounds",
+                    fields=fields,
+                    metadata_properties=metadata_properties,
+                    vectors_settings=vectors_settings,
+                    description="Evolution rounds for prompt optimization"
                 )
                 
-                logger.info("Creating archer_rounds dataset...")
-                new_dataset = rg.Dataset(name="archer_rounds", settings=rounds_settings)
-                new_dataset.create()
-                
-                # Verify creation worked by fetching again with the correct method
-                self.datasets["rounds"] = self.client.get_dataset("archer_rounds")
-                if self.datasets["rounds"] is None:
-                    raise Exception("Failed to create archer_rounds dataset")
-                
-                logger.info("Created new rounds dataset")
+                self.datasets["rounds"] = rounds_dataset
+                logger.info("Rounds dataset initialized successfully")
                 return True
+                
+            except Exception as e:
+                logger.error(f"Error initializing rounds dataset: {str(e)}")
+                return False
                 
         except Exception as e:
             logger.error(f"Error initializing rounds dataset: {str(e)}")
@@ -1405,65 +1405,59 @@ class ArgillaDatabase:
     
     def _initialize_prompt_lineage_dataset(self) -> bool:
         """
-        Initialize the Prompt Lineage dataset.
+        Initialize the prompt lineage dataset.
         
         Returns:
-            bool: True if initialization is successful, False otherwise
+            bool: True if initialization was successful, False otherwise
         """
         try:
-            # Check if dataset exists
+            if not self.client:
+                success = self.connect()
+                if not success:
+                    return False
+            
+            # Check if the dataset already exists
             try:
-                # Fix: Use get_dataset instead of datasets()
-                lineage_dataset = self.client.get_dataset("archer_prompt_lineage")
-                if lineage_dataset is not None:
-                    self.datasets["prompt_lineage"] = lineage_dataset
-                    logger.info("Found existing prompt lineage dataset")
-                    return True
-                else:
-                    raise Exception("Dataset returned is None")
-            except Exception as e:
-                logger.info(f"Creating new prompt lineage dataset: {str(e)}")
-                lineage_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="change_reason", title="Change Reason")
-                    ],
-                    questions=[
-                        # Add questions to satisfy Argilla requirements
-                        rg.TextQuestion(
-                            name="effectiveness",
-                            title="Change Effectiveness",
-                            description="Assessment of how effective the prompt change was",
-                            required=False,
-                            use_markdown=True
-                        ),
-                        rg.RatingQuestion(
-                            name="improvement_rating",
-                            values=[1, 2, 3, 4, 5],
-                            title="Improvement Rating",
-                            description="Rating of the improvement from parent to child prompt",
-                            required=True
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="lineage_id", title="Lineage ID"),
-                        rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
-                        rg.TermsMetadataProperty(name="child_prompt_id", title="Child Prompt ID"),
-                        rg.TermsMetadataProperty(name="round_id", title="Round ID"),
-                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
-                    ]
+                existing_dataset = self.client.get_dataset("archer_prompt_lineage")
+                self.datasets["prompt_lineage"] = existing_dataset
+                logger.info("Using existing prompt lineage dataset")
+                return True
+            except Exception:
+                # Dataset doesn't exist, create it
+                pass
+            
+            # Create dataset definitions
+            fields = [
+                rg.TextField(name="parent_prompt_id", title="Parent Prompt ID"),
+                rg.TextField(name="child_prompt_id", title="Child Prompt ID"),
+                rg.TextField(name="round_id", title="Round ID"),
+                rg.TextField(name="change_reason", title="Reason for Change"),
+            ]
+            
+            metadata_properties = {
+                "lineage_id": {"type": "string"},
+                "created_at": {"type": "string", "format": "date-time"},
+            }
+            
+            vectors_settings = {}
+            
+            # Create the dataset
+            try:
+                lineage_dataset = self.client.create_dataset(
+                    name="archer_prompt_lineage",
+                    fields=fields,
+                    metadata_properties=metadata_properties,
+                    vectors_settings=vectors_settings,
+                    description="Lineage tracking for prompt evolution"
                 )
                 
-                logger.info("Creating archer_prompt_lineage dataset...")
-                new_dataset = rg.Dataset(name="archer_prompt_lineage", settings=lineage_settings)
-                new_dataset.create()
-                
-                # Verify creation worked by fetching again with the correct method
-                self.datasets["prompt_lineage"] = self.client.get_dataset("archer_prompt_lineage")
-                if self.datasets["prompt_lineage"] is None:
-                    raise Exception("Failed to create archer_prompt_lineage dataset")
-                
-                logger.info("Created new prompt lineage dataset")
+                self.datasets["prompt_lineage"] = lineage_dataset
+                logger.info("Prompt lineage dataset initialized successfully")
                 return True
+                
+            except Exception as e:
+                logger.error(f"Error initializing prompt lineage dataset: {str(e)}")
+                return False
                 
         except Exception as e:
             logger.error(f"Error initializing prompt lineage dataset: {str(e)}")
@@ -1471,60 +1465,59 @@ class ArgillaDatabase:
     
     def _initialize_outputs_dataset(self) -> bool:
         """
-        Initialize dataset for storing model outputs.
+        Initialize the outputs dataset.
         
         Returns:
-            bool: True if successful, False otherwise
+            bool: True if initialization was successful, False otherwise
         """
         try:
-            # Check if dataset already exists
+            if not self.client:
+                success = self.connect()
+                if not success:
+                    return False
+            
+            # Check if the dataset already exists
             try:
-                # Fix: Use get_dataset instead of datasets() which doesn't have list_datasets
-                outputs_dataset = self.client.get_dataset("archer_outputs")
-                if outputs_dataset is not None:
-                    self.datasets["outputs"] = outputs_dataset
-                    logger.info("Found existing outputs dataset")
-                    return True
-                else:
-                    raise Exception("Dataset returned is None")
-            except Exception as e:
-                logger.info(f"Creating new outputs dataset: {str(e)}")
-                
-                # Define settings for the dataset
-                outputs_settings = rg.Settings(
-                    fields=[
-                        rg.TextField(name="input", title="Input Data"),
-                        rg.TextField(name="generated_content", title="Generated Content"),
-                        rg.TextField(name="prompt_used", title="Prompt Used")
-                    ],
-                    questions=[
-                        rg.RatingQuestion(
-                            name="quality_score",
-                            values=[1, 2, 3, 4, 5],
-                            title="Quality Score",
-                            description="Rate the quality of the generated output",
-                            required=True
-                        )
-                    ],
-                    metadata=[
-                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                        rg.TermsMetadataProperty(name="round", title="Round Number"),
-                        rg.TermsMetadataProperty(name="output_id", title="Output ID"),
-                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
-                    ]
+                existing_dataset = self.client.get_dataset("archer_outputs")
+                self.datasets["outputs"] = existing_dataset
+                logger.info("Using existing outputs dataset")
+                return True
+            except Exception:
+                # Dataset doesn't exist, create it
+                pass
+            
+            # Create dataset definitions
+            fields = [
+                rg.TextField(name="input_data", title="Input Data"),
+                rg.TextField(name="content", title="Generated Content"),
+                rg.TextField(name="prompt_id", title="Prompt ID"),
+                rg.NumberField(name="round_num", title="Round Number"),
+            ]
+            
+            metadata_properties = {
+                "output_id": {"type": "string"},
+                "created_at": {"type": "string", "format": "date-time"},
+            }
+            
+            vectors_settings = {}
+            
+            # Create the dataset
+            try:
+                outputs_dataset = self.client.create_dataset(
+                    name="archer_outputs",
+                    fields=fields,
+                    metadata_properties=metadata_properties,
+                    vectors_settings=vectors_settings,
+                    description="Generated outputs from prompts"
                 )
                 
-                logger.info("Creating archer_outputs dataset...")
-                new_dataset = rg.Dataset(name="archer_outputs", settings=outputs_settings)
-                new_dataset.create()
-                
-                # Verify creation worked by fetching again using the corrected method
-                self.datasets["outputs"] = self.client.get_dataset("archer_outputs")
-                if self.datasets["outputs"] is None:
-                    raise Exception("Failed to create archer_outputs dataset")
-                
-                logger.info("Created new outputs dataset")
+                self.datasets["outputs"] = outputs_dataset
+                logger.info("Outputs dataset initialized successfully")
                 return True
+                
+            except Exception as e:
+                logger.error(f"Error initializing outputs dataset: {str(e)}")
+                return False
                 
         except Exception as e:
             logger.error(f"Error initializing outputs dataset: {str(e)}")
