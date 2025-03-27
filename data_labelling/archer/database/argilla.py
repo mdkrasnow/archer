@@ -214,36 +214,55 @@ class ArgillaDatabase:
                 logger.error(f"Output with ID {output_id} not found")
                 return False
             
-            # Handle the output structure - extract fields and metadata safely
+            # Safely extract fields and metadata
+            input_data = ""
+            generated_content = ""
+            prompt_id = ""
+            
             try:
-                # Safely extract fields data
+                # Extract fields based on the structure
                 if isinstance(output, dict):
-                    if 'fields' in output:
+                    # Try to get fields from the fields dictionary
+                    if "fields" in output and isinstance(output["fields"], dict):
                         input_data = output["fields"].get("input", "")
                         generated_content = output["fields"].get("generated_content", "")
-                        prompt_id = output["metadata"].get("prompt_id", "unknown") if "metadata" in output else "unknown"
-                    elif "input" in output and "generated_content" in output:
-                        # Alternative structure: keys are at the top level
+                    # Or try to get them directly from the output dict
+                    else:
                         input_data = output.get("input", "")
                         generated_content = output.get("generated_content", "")
-                        # Check if metadata is a nested structure or at top level
-                        if "metadata" in output and isinstance(output["metadata"], dict):
-                            prompt_id = output["metadata"].get("prompt_id", "unknown")
-                        else:
-                            prompt_id = output.get("prompt_id", "unknown")
+                    
+                    # Try to get metadata
+                    if "metadata" in output and isinstance(output["metadata"], dict):
+                        prompt_id = output["metadata"].get("prompt_id", "unknown")
                     else:
-                        logger.error(f"Output found but has unexpected dictionary structure: {list(output.keys())}")
-                        return False
-                elif hasattr(output, 'fields'):
-                    input_data = getattr(getattr(output, 'fields', object()), 'input', "")
-                    generated_content = getattr(getattr(output, 'fields', object()), 'generated_content', "")
-                    prompt_id = getattr(getattr(output, 'metadata', object()), 'prompt_id', "unknown")
+                        prompt_id = output.get("prompt_id", "unknown")
+                # Handle object-based structure
+                elif hasattr(output, "fields"):
+                    fields = getattr(output, "fields", {})
+                    if isinstance(fields, dict):
+                        input_data = fields.get("input", "")
+                        generated_content = fields.get("generated_content", "")
+                    else:
+                        input_data = getattr(fields, "input", "")
+                        generated_content = getattr(fields, "generated_content", "")
+                    
+                    metadata = getattr(output, "metadata", {})
+                    if isinstance(metadata, dict):
+                        prompt_id = metadata.get("prompt_id", "unknown")
+                    else:
+                        prompt_id = getattr(metadata, "prompt_id", "unknown")
                 else:
-                    logger.error(f"Output found but has unexpected structure: {type(output)}")
-                    return False
+                    logger.warning(f"Unexpected output structure: {type(output)}")
+                    # Set default values if we can't extract the real ones
+                    input_data = str(output)
+                    generated_content = str(output)
+                    prompt_id = "unknown"
             except Exception as e:
                 logger.error(f"Error extracting data from output: {str(e)}")
-                return False
+                # Set default values
+                input_data = ""
+                generated_content = ""
+                prompt_id = "unknown"
             
             # Create a unique ID for this evaluation
             evaluator_id = "human" if is_human else "ai_evaluator"
@@ -255,7 +274,16 @@ class ArgillaDatabase:
                 rg.Response(question_name="improved_output", value=improved_output, user_id=self.user_id)
             ]
             
-            # Create a record
+            # Create a record with standard metadata structure - remove the status field
+            metadata = {
+                "output_id": output_id,
+                "prompt_id": prompt_id,
+                "evaluator_id": evaluator_id,
+                "is_human": "1" if is_human else "0",
+                "timestamp": datetime.now().isoformat()
+                # Removed the 'status' field as it's not defined in the dataset schema
+            }
+            
             record = rg.Record(
                 fields={
                     "input": input_data,
@@ -263,13 +291,7 @@ class ArgillaDatabase:
                     "evaluation_content": ""  # This will be filled by responses
                 },
                 responses=responses,
-                metadata={
-                    "output_id": output_id,
-                    "prompt_id": prompt_id,
-                    "evaluator_id": evaluator_id,
-                    "is_human": "1" if is_human else "0",
-                    "timestamp": datetime.now().isoformat()
-                }
+                metadata=metadata
             )
             
             try:
@@ -985,7 +1007,7 @@ class ArgillaDatabase:
                     return pd.DataFrame()
                 
                 # Sort by timestamp (most recent first)
-                records.sort(key=lambda x: x["metadata"].get("timestamp", ""), reverse=True)
+                records.sort(key=lambda x: x.get("metadata", {}).get("timestamp", ""), reverse=True)
                 
                 # Limit the number of records
                 records = records[:limit]
@@ -993,25 +1015,37 @@ class ArgillaDatabase:
                 # Build DataFrame with required columns
                 rows = []
                 for record in records:
+                    # Safely extract metadata
+                    metadata = record.get("metadata", {})
+                    if not isinstance(metadata, dict):
+                        metadata = {}
+                        
                     # Extract relevant data from the record
-                    output_id = record["metadata"].get("output_id", "")
-                    prompt_id = record["metadata"].get("prompt_id", "")
-                    timestamp = record["metadata"].get("timestamp", "")
+                    output_id = metadata.get("output_id", "")
+                    prompt_id = metadata.get("prompt_id", "")
+                    timestamp = metadata.get("timestamp", "")
                     
                     # Extract score, feedback and improved output from responses
                     score, feedback, improved_output = None, "", ""
-                    if "responses" in record:
-                        for response in record["responses"]:
-                            if response["question"]["name"] == "score":
-                                score = float(response["value"])
-                            elif response["question"]["name"] == "feedback":
-                                feedback = response["value"]
-                            elif response["question"]["name"] == "improved_output":
-                                improved_output = response["value"]
+                    responses = record.get("responses", [])
+                    if responses:
+                        for response in responses:
+                            question = response.get("question", {})
+                            question_name = question.get("name", "")
+                            if question_name == "score":
+                                score = float(response.get("value", 0))
+                            elif question_name == "feedback":
+                                feedback = response.get("value", "")
+                            elif question_name == "improved_output":
+                                improved_output = response.get("value", "")
                     
                     # Get the original input and generated content
-                    input_data = record["fields"].get("input", "")
-                    generated_content = record["fields"].get("generated_content", "")
+                    fields = record.get("fields", {})
+                    if not isinstance(fields, dict):
+                        fields = {}
+                        
+                    input_data = fields.get("input", "")
+                    generated_content = fields.get("generated_content", "")
                     
                     row = {
                         "output_id": output_id,

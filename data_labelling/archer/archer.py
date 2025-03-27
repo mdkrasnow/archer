@@ -196,6 +196,14 @@ class Archer:
         # Store candidate prompts for evaluation
         self.candidate_prompts = []
 
+    @property
+    def active_prompts(self):
+        """
+        Property that returns active_generator_prompts for backward compatibility.
+        This ensures the app can continue to work with the active prompts.
+        """
+        return self.active_generator_prompts
+
     def run_forward_pass(self, input_data: Any) -> list:
         """
         Runs the forward pass: generates content using active prompts and evaluates it.

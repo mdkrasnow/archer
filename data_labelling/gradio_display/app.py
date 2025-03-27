@@ -242,6 +242,9 @@ class DanielsonArcherApp:
             bool: True if successful, False otherwise
         """
         try:
+            logger = logging.getLogger(__name__)
+            logger.info("Saving evaluation to database")
+            
             # Format the input data
             input_data = json.dumps({
                 "low_inference_notes": low_inference_notes,
@@ -250,8 +253,13 @@ class DanielsonArcherApp:
             
             # Generate a prompt ID if we don't have one from Archer
             prompt_id = str(uuid.uuid4())
+            if hasattr(self, 'archer') and self.archer and hasattr(self.archer, 'active_prompts') and self.archer.active_prompts:
+                prompt_id = getattr(self.archer.active_prompts[0], 'id', prompt_id)
+            
+            logger.info(f"Using prompt ID: {prompt_id}")
             
             # Store the generated content
+            logger.info("Storing generated content")
             output_id = self.db.store_generated_content(
                 input_data=input_data,
                 content=content,
@@ -263,7 +271,10 @@ class DanielsonArcherApp:
                 logger.error("Failed to store generated content")
                 return False
             
+            logger.info(f"Generated content stored with output ID: {output_id}")
+            
             # Store the evaluation
+            logger.info("Storing evaluation")
             eval_success = self.db.store_evaluation(
                 output_id=output_id,
                 score=int(score),
@@ -271,6 +282,29 @@ class DanielsonArcherApp:
                 improved_output=perfect_output,
                 is_human=True  # Mark this as human evaluation since it's coming from the UI
             )
+            
+            logger.info(f"Evaluation storage {'successful' if eval_success else 'failed'}")
+            
+            if eval_success:
+                # Verify the evaluation was stored correctly by retrieving it
+                logger.info("Verifying evaluation was stored correctly")
+                try:
+                    verified = self.db._get_latest_evaluation(output_id)
+                    if verified:
+                        logger.info("Evaluation successfully verified in database")
+                        # Check if metadata is correct
+                        metadata = verified.get("metadata", {})
+                        if isinstance(metadata, dict):
+                            is_human = metadata.get("is_human", "0")
+                            logger.info(f"Evaluation is_human flag: {is_human}")
+                            # Log all metadata keys for debugging
+                            logger.info(f"Metadata keys found: {list(metadata.keys())}")
+                        else:
+                            logger.warning(f"Unexpected metadata structure: {type(metadata)}")
+                    else:
+                        logger.warning("Could not verify evaluation in database")
+                except Exception as ve:
+                    logger.error(f"Error verifying evaluation: {str(ve)}")
             
             return eval_success
         except Exception as e:
@@ -298,10 +332,33 @@ class DanielsonArcherApp:
             logger.info("Fetching validated evaluations from database")
             evaluations = self.db.get_validated_evaluations(limit=10)
             
-            if not evaluations:
+            if evaluations is None or len(evaluations) == 0:
                 logger.warning("No validated evaluations found for backward pass")
+                
+                # Check if there are any records at all in the database
+                # Try to fetch any evaluations without the human filter
+                try:
+                    logger.info("Attempting to fetch any evaluations without human filter")
+                    all_evaluations = self.db.datasets["evaluations"].records().to_list(flatten=True)
+                    if all_evaluations:
+                        logger.info(f"Found {len(all_evaluations)} total evaluations, but none are validated")
+                        
+                        # Check if there are evaluations that need to be manually validated
+                        unvalidated = [e for e in all_evaluations 
+                                      if e.get("metadata", {}).get("is_human", "0") == "0"]
+                        
+                        if unvalidated:
+                            logger.info(f"Found {len(unvalidated)} unvalidated evaluations that need human validation")
+                            logger.info("Please manually validate some evaluations before triggering backward pass")
+                        else:
+                            logger.info("No unvalidated evaluations found")
+                    else:
+                        logger.info("No evaluations found in the database")
+                except Exception as e:
+                    logger.error(f"Error checking for unvalidated evaluations: {str(e)}")
+                
                 self.current_round += 1
-                return True
+                return False
                 
             logger.info(f"Retrieved {len(evaluations)} evaluations from database")
             
@@ -310,36 +367,54 @@ class DanielsonArcherApp:
             logger.info("Transforming evaluations for backward pass")
             archer_evaluations = []
             
-            for evaluation in evaluations:
+            for _, evaluation in evaluations.iterrows():
                 try:
                     # Extract data from evaluation
-                    content = evaluation.get("content", "")
+                    content = evaluation.get("generated_content", "")
                     
                     # Parse input data (should be JSON with component_id and input)
                     input_data = {}
                     try:
                         input_str = evaluation.get("input", "{}")
-                        input_data = json.loads(input_str)
+                        if isinstance(input_str, str) and (input_str.startswith('{') or input_str.startswith('[')):
+                            input_data = json.loads(input_str)
+                        else:
+                            input_data = {"input": input_str}
                     except Exception as e:
                         logger.error(f"Error parsing input data: {str(e)}")
-                        input_data = {"component_id": "1a", "input": ""}
+                        input_data = {"component_id": "1a", "input": input_str}
                     
-                    # Create a prompt object from one of the current active prompts
-                    # This is a simplification - ideally we'd retrieve the exact prompt used
-                    if self.archer.active_prompts:
-                        prompt = self.archer.active_prompts[0]
-                    else:
-                        prompt = Prompt("Generate an evaluation for component {component_id} based on {input}")
+                    # Create a prompt object from one of the current active prompts or from the database
+                    prompt_id = evaluation.get("prompt_id", "")
+                    prompt_obj = None
+                    
+                    # Try to find the matching prompt by ID
+                    if hasattr(self.archer, 'active_prompts'):
+                        for p in self.archer.active_prompts:
+                            if getattr(p, 'id', None) == prompt_id:
+                                prompt_obj = p
+                                break
+                    
+                    # If not found, use the first active prompt or create a default one
+                    if prompt_obj is None:
+                        if hasattr(self.archer, 'active_prompts') and self.archer.active_prompts:
+                            prompt_obj = self.archer.active_prompts[0]
+                        elif hasattr(self.archer, 'active_generator_prompts') and self.archer.active_generator_prompts:
+                            prompt_obj = self.archer.active_generator_prompts[0]
+                        else:
+                            # Create a default prompt if none available
+                            from data_labelling.archer.helpers.prompt import Prompt
+                            prompt_obj = Prompt("Generate an evaluation for component {component_id} based on {input}")
                     
                     # Create evaluation dict
                     eval_dict = {
-                        "score": evaluation.get("score", 3),
+                        "score": float(evaluation.get("score", 3)),
                         "feedback": evaluation.get("feedback", ""),
-                        "improved_output": evaluation.get("perfect_output", "")
+                        "improved_output": evaluation.get("improved_output", "")
                     }
                     
                     # Add to archer evaluations
-                    archer_evaluations.append((prompt, content, eval_dict))
+                    archer_evaluations.append((prompt_obj, content, eval_dict))
                     logger.debug(f"Added evaluation: score={eval_dict['score']}")
                 except Exception as e:
                     logger.error(f"Error processing evaluation: {str(e)}")
@@ -347,7 +422,7 @@ class DanielsonArcherApp:
             if not archer_evaluations:
                 logger.warning("No valid evaluations to process after transformation")
                 self.current_round += 1
-                return True
+                return False
             
             # Trigger the backward pass in the Archer system
             logger.info(f"Calling Archer backward pass with {len(archer_evaluations)} evaluations")
@@ -517,7 +592,15 @@ class DanielsonArcherApp:
             
         try:
             # Get the active prompts from the Archer instance
-            active_prompts = self.archer.active_prompts
+            # First try active_prompts, then fall back to active_generator_prompts
+            if hasattr(self.archer, 'active_prompts'):
+                active_prompts = self.archer.active_prompts
+            elif hasattr(self.archer, 'active_generator_prompts'):
+                active_prompts = self.archer.active_generator_prompts
+            else:
+                logger.warning("No active prompts attribute found in Archer instance")
+                return "No active prompts found."
+                
             if not active_prompts:
                 logger.warning("No active prompts found in Archer instance")
                 return "No active prompts found."
