@@ -113,6 +113,7 @@ class DanielsonArcherApp:
         # Initialize state variables
         self.current_data = None
         self.current_round = 1
+        self.current_output_id = None
         self.app = None
         
     def _get_evaluation_rubric(self) -> str:
@@ -270,6 +271,9 @@ class DanielsonArcherApp:
             if not output_id:
                 logger.error("Failed to store generated content")
                 return False
+            
+            # Store the output_id as an instance variable so it can be accessed in tests
+            self.current_output_id = output_id
             
             logger.info(f"Generated content stored with output ID: {output_id}")
             

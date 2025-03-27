@@ -267,9 +267,24 @@ class ArgillaDatabase:
             # Create a unique ID for this evaluation
             evaluator_id = "human" if is_human else "ai_evaluator"
             
-            # Create responses
+            # Ensure score is an integer in the valid range [1, 2, 3, 4, 5]
+            # strip any non-numeric characters and convert to int
+            score = ''.join(char for char in str(score) if char.isdigit())
+            try:
+                int_score = int(score)
+                if int_score < 1:
+                    int_score = 1
+                    logger.warning(f"Score {score} was below minimum, setting to 1")
+                elif int_score > 5:
+                    int_score = 5
+                    logger.warning(f"Score {score} was above maximum, setting to 5")
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid score {score}, defaulting to 3")
+                int_score = 3
+            
+            # Create responses with integer score
             responses = [
-                rg.Response(question_name="score", value=score, user_id=self.user_id),
+                rg.Response(question_name="score", value=int_score, user_id=self.user_id),
                 rg.Response(question_name="feedback", value=feedback, user_id=self.user_id),
                 rg.Response(question_name="improved_output", value=improved_output, user_id=self.user_id)
             ]
@@ -1452,44 +1467,53 @@ class ArgillaDatabase:
         """
         try:
             # Check if dataset already exists
-            datasets = self.client.datasets.list_datasets()
-            if any(ds.name == "archer_outputs" for ds in datasets.items):
-                logger.info("Outputs dataset already exists")
-                self.datasets["outputs"] = self.client.datasets.find("archer_outputs")
-                return True
-                    
-            # Create new dataset with required fields and questions
-            from argilla.client.feedback.schemas.fields import TextField, RatingQuestion
-            
-            # Define fields for the dataset
-            fields = [
-                TextField(name="input_data", title="Input Data"),
-                TextField(name="content", title="Generated Content"),
-                TextField(name="prompt_id", title="Prompt ID"),
-                TextField(name="round_num", title="Round Number")
-            ]
-            
-            # Define questions for feedback/evaluation
-            questions = [
-                RatingQuestion(
-                    name="quality_score",
-                    title="Quality Score",
-                    description="Rate the quality of the generated output",
-                    values=[1, 2, 3, 4, 5]
-                )
-            ]
-            
-            # Create new dataset with the required parameters
-            dataset = self.client.datasets.create(
-                name="archer_outputs",
-                workspace=self.workspace,
-                fields=fields,
-                questions=questions
-            )
+            try:
+                outputs_dataset = self.client.datasets("archer_outputs")
+                if outputs_dataset is not None:
+                    self.datasets["outputs"] = outputs_dataset
+                    logger.info("Found existing outputs dataset")
+                    return True
+                else:
+                    raise Exception("Dataset returned is None")
+            except Exception as e:
+                logger.info(f"Creating new outputs dataset: {str(e)}")
                 
-            self.datasets["outputs"] = dataset
-            logger.info("Outputs dataset created successfully")
-            return True
+                # Define settings for the dataset
+                outputs_settings = rg.Settings(
+                    fields=[
+                        rg.TextField(name="input", title="Input Data"),
+                        rg.TextField(name="generated_content", title="Generated Content"),
+                        rg.TextField(name="prompt_used", title="Prompt Used")
+                    ],
+                    questions=[
+                        rg.RatingQuestion(
+                            name="quality_score",
+                            values=[1, 2, 3, 4, 5],
+                            title="Quality Score",
+                            description="Rate the quality of the generated output",
+                            required=True
+                        )
+                    ],
+                    metadata=[
+                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                        rg.TermsMetadataProperty(name="round", title="Round Number"),
+                        rg.TermsMetadataProperty(name="output_id", title="Output ID"),
+                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
+                    ]
+                )
+                
+                logger.info("Creating archer_outputs dataset...")
+                new_dataset = rg.Dataset(name="archer_outputs", settings=outputs_settings)
+                new_dataset.create()
+                
+                # Verify creation worked by fetching again
+                self.datasets["outputs"] = self.client.datasets("archer_outputs")
+                if self.datasets["outputs"] is None:
+                    raise Exception("Failed to create archer_outputs dataset")
+                
+                logger.info("Created new outputs dataset")
+                return True
+                
         except Exception as e:
             logger.error(f"Error initializing outputs dataset: {str(e)}")
             return False
