@@ -3,9 +3,10 @@ import pandas as pd
 import numpy as np
 import uuid
 from datetime import datetime
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Tuple, Optional, Union
 import os
 import logging
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -15,8 +16,13 @@ logger = logging.getLogger(__name__)
 class ArgillaDatabase:
     """
     Handles all interactions with the Argilla database for the Archer system.
-    Responsible for storing and retrieving data related to prompts, generated content,
-    evaluations, and performance metrics.
+    
+    This class implements the revised schema:
+    - Records: Main table with all generated content and evaluations
+    - Generator Prompts: Stores generator prompts with metrics
+    - Evaluator Prompts: Stores evaluator prompts
+    - Rounds: Tracks iteration information
+    - Prompt Lineage: Tracks prompt evolution
     """
     
     def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None):
@@ -55,7 +61,7 @@ class ArgillaDatabase:
     
     def initialize_datasets(self) -> bool:
         """
-        Initialize all required datasets in Argilla.
+        Initialize all required datasets in Argilla according to the revised schema.
         Creates the datasets if they don't exist.
         
         Returns:
@@ -67,167 +73,29 @@ class ArgillaDatabase:
                 if not success:
                     return False
             
-            # Initialize Outputs Dataset
-            try:
-                # First check if dataset exists by trying to fetch it
-                try:
-                    outputs_dataset = self.client.datasets("archer_outputs")
-                    # Verify the dataset was actually found and not None
-                    if outputs_dataset is not None:
-                        self.datasets["outputs"] = outputs_dataset
-                        logger.info("Found existing outputs dataset")
-                    else:
-                        raise Exception("Dataset returned is None")
-                except Exception as e:
-                    logger.info(f"Creating new outputs dataset: {str(e)}")
-                    outputs_settings = rg.Settings(
-                        fields=[
-                            rg.TextField(name="input", title="Input Data"),
-                            rg.TextField(name="generated_content", title="Generated Content"),
-                            rg.TextField(name="prompt_used", title="Prompt Used")
-                        ],
-                        questions=[
-                            rg.RatingQuestion(
-                                name="score",
-                                title="Quality Score",
-                                description="Rate the quality of the output",
-                                values=[1, 2, 3, 4, 5]
-                            ),
-                            rg.TextQuestion(
-                                name="feedback",
-                                title="Feedback",
-                                description="Provide feedback on how to improve the output"
-                            ),
-                        ],
-                        metadata=[
-                            rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                            rg.TermsMetadataProperty(name="round", title="Round Number"),
-                            rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
-                            rg.TermsMetadataProperty(name="output_id", title="Output ID")
-                        ]
-                    )
-                    logger.info("Creating archer_outputs dataset...")
-                    new_dataset = rg.Dataset(name="archer_outputs", settings=outputs_settings)
-                    new_dataset.create()
-                    # Verify creation worked by fetching again
-                    self.datasets["outputs"] = self.client.datasets("archer_outputs")
-                    if self.datasets["outputs"] is None:
-                        raise Exception("Failed to create archer_outputs dataset")
-                    logger.info("Created new outputs dataset")
-            except Exception as e:
-                logger.error(f"Error with outputs dataset: {str(e)}")
-                return False
+            # Dictionary to track dataset initialization status
+            dataset_creation_results = {}
             
-            # Initialize Prompts Dataset
-            try:
-                # First check if dataset exists by trying to fetch it
-                try:
-                    prompts_dataset = self.client.datasets("archer_prompts")
-                    # Verify the dataset was actually found and not None
-                    if prompts_dataset is not None:
-                        self.datasets["prompts"] = prompts_dataset
-                        logger.info("Found existing prompts dataset")
-                    else:
-                        raise Exception("Dataset returned is None")
-                except Exception as e:
-                    logger.info(f"Creating new prompts dataset: {str(e)}")
-                    prompts_settings = rg.Settings(
-                        fields=[
-                            rg.TextField(name="prompt_text", title="Prompt Text"),
-                            rg.TextField(name="model", title="Model"),
-                            rg.TextField(name="purpose", title="Purpose")
-                        ],
-                        questions=[
-                            rg.RatingQuestion(
-                                name="average_score",
-                                title="Average Score",
-                                description="Average performance score for this prompt",
-                                values=[1, 2, 3, 4, 5]
-                            ),
-                            rg.LabelQuestion(
-                                name="survived",
-                                title="Survived",
-                                description="Whether this prompt survived to the next generation",
-                                labels=["True", "False"]
-                            )
-                        ],
-                        metadata=[
-                            rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                            rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
-                            rg.TermsMetadataProperty(name="generation", title="Generation Number"),
-                            rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
-                        ]
-                    )
-                    logger.info("Creating archer_prompts dataset...")
-                    new_dataset = rg.Dataset(name="archer_prompts", settings=prompts_settings)
-                    new_dataset.create()
-                    # Verify creation worked by fetching again
-                    self.datasets["prompts"] = self.client.datasets("archer_prompts")
-                    if self.datasets["prompts"] is None:
-                        raise Exception("Failed to create archer_prompts dataset")
-                    logger.info("Created new prompts dataset")
-            except Exception as e:
-                logger.error(f"Error with prompts dataset: {str(e)}")
-                return False
+            # Initialize Records Dataset
+            dataset_creation_results["records"] = self._initialize_records_dataset()
             
-            # Initialize Evaluations Dataset
-            try:
-                # First check if dataset exists by trying to fetch it
-                try:
-                    evaluations_dataset = self.client.datasets("archer_evaluations")
-                    # Verify the dataset was actually found and not None
-                    if evaluations_dataset is not None:
-                        self.datasets["evaluations"] = evaluations_dataset
-                        logger.info("Found existing evaluations dataset")
-                    else:
-                        raise Exception("Dataset returned is None")
-                except Exception as e:
-                    logger.info(f"Creating new evaluations dataset: {str(e)}")
-                    evaluations_settings = rg.Settings(
-                        fields=[
-                            rg.TextField(name="input", title="Input Data"),
-                            rg.TextField(name="generated_content", title="Generated Content"),
-                            rg.TextField(name="evaluation_content", title="Evaluation")
-                        ],
-                        questions=[
-                            rg.RatingQuestion(
-                                name="score",
-                                title="Quality Score",
-                                description="Rate the quality of the output",
-                                values=[1, 2, 3, 4, 5]
-                            ),
-                            rg.TextQuestion(
-                                name="feedback",
-                                title="Feedback",
-                                description="Feedback on how to improve"
-                            ),
-                            rg.TextField(name="improved_output", title="Improved Output")
-                        ],
-                        metadata=[
-                            rg.TermsMetadataProperty(name="output_id", title="Output ID"),
-                            rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
-                            rg.TermsMetadataProperty(name="evaluator_id", title="Evaluator ID"),
-                            rg.TermsMetadataProperty(name="is_human", title="Is Human Evaluation"),
-                            rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
-                        ]
-                    )
-                    logger.info("Creating archer_evaluations dataset...")
-                    new_dataset = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
-                    new_dataset.create()
-                    # Verify creation worked by fetching again
-                    self.datasets["evaluations"] = self.client.datasets("archer_evaluations")
-                    if self.datasets["evaluations"] is None:
-                        raise Exception("Failed to create archer_evaluations dataset")
-                    logger.info("Created new evaluations dataset")
-            except Exception as e:
-                logger.error(f"Error with evaluations dataset: {str(e)}")
-                return False
-                
-            # Verify all datasets exist
-            if not all(self.datasets.get(k) is not None for k in ["outputs", "prompts", "evaluations"]):
+            # Initialize Generator Prompts Dataset
+            dataset_creation_results["generator_prompts"] = self._initialize_generator_prompts_dataset()
+            
+            # Initialize Evaluator Prompts Dataset  
+            dataset_creation_results["evaluator_prompts"] = self._initialize_evaluator_prompts_dataset()
+            
+            # Initialize Rounds Dataset
+            dataset_creation_results["rounds"] = self._initialize_rounds_dataset()
+            
+            # Initialize Prompt Lineage Dataset
+            dataset_creation_results["prompt_lineage"] = self._initialize_prompt_lineage_dataset()
+            
+            # Check if all datasets were initialized successfully
+            if not all(dataset_creation_results.values()):
                 logger.error("Not all datasets were properly initialized")
-                missing = [k for k in ["outputs", "prompts", "evaluations"] if self.datasets.get(k) is None]
-                logger.error(f"Missing datasets: {', '.join(missing)}")
+                failed_datasets = [k for k, v in dataset_creation_results.items() if not v]
+                logger.error(f"Failed datasets: {', '.join(failed_datasets)}")
                 return False
             
             logger.info("All datasets initialized successfully")
@@ -580,12 +448,12 @@ class ArgillaDatabase:
             logger.error(f"Error updating prompt performance: {str(e)}")
             return False
     
-    def get_current_data_for_annotation(self, round_num: int, limit: int = 20) -> Optional[pd.DataFrame]:
+    def get_current_data_for_annotation(self, round_id: str, limit: int = 20) -> Optional[pd.DataFrame]:
         """
-        Get the current data for human annotation.
+        Get the current data for human annotation based on round ID.
         
         Args:
-            round_num: Current round number
+            round_id: ID of the round to get data for
             limit: Maximum number of records to return
             
         Returns:
@@ -598,38 +466,59 @@ class ArgillaDatabase:
                     return None
                     
             # Ensure datasets are initialized
-            if not all(k in self.datasets for k in ["outputs", "evaluations"]):
+            if "records" not in self.datasets:
                 success = self.initialize_datasets()
                 if not success:
                     return None
             
-            # Query for outputs from the current round
-            round_filter = rg.Filter(("metadata.round", "==", str(round_num)))
+            # Query for records from the specified round
+            round_filter = rg.Filter(("metadata.round_id", "==", round_id))
             query = rg.Query(filter=round_filter)
-            outputs = self.datasets["outputs"].records(query=query).to_list(flatten=True)
+            records = self.datasets["records"].records(query=query).to_list(flatten=True)
             
             # Limit the number of records
-            outputs = outputs[:limit]
+            records = records[:limit]
             
-            if not outputs:
-                logger.warning(f"No outputs found for round {round_num}")
+            if not records:
+                logger.warning(f"No records found for round {round_id}")
                 return pd.DataFrame()
             
             # Build a DataFrame with the required columns
             rows = []
-            for output in outputs:
-                # Get the latest evaluation for this output
-                output_id = output["metadata"]["output_id"]
-                evaluation = self._get_latest_evaluation(output_id)
+            for record in records:
+                # Extract AI and human evaluations from the responses
+                ai_score, ai_feedback, ai_improved_output = None, "", ""
+                human_score, human_feedback, human_improved_output = None, "", ""
+                
+                if "responses" in record:
+                    for response in record["responses"]:
+                        question_name = response["question"]["name"]
+                        if question_name == "ai_score":
+                            ai_score = float(response["value"])
+                        elif question_name == "ai_feedback":
+                            ai_feedback = response["value"]
+                        elif question_name == "ai_improved_output":
+                            ai_improved_output = response["value"]
+                        elif question_name == "human_score":
+                            human_score = float(response["value"]) if response["value"] is not None else None
+                        elif question_name == "human_feedback":
+                            human_feedback = response["value"]
+                        elif question_name == "human_improved_output":
+                            human_improved_output = response["value"]
                 
                 row = {
-                    "output_id": output_id,
-                    "input": output["fields"]["input"],
-                    "eval_content": output["fields"]["generated_content"],
-                    "eval_score": evaluation.get("score", 0) if evaluation else 0,
-                    "eval_feedback": evaluation.get("feedback", "") if evaluation else "",
-                    "eval_perfect_output": evaluation.get("improved_output", "") if evaluation else "",
-                    "prompt_id": output["metadata"]["prompt_id"]
+                    "record_id": record["id"],
+                    "input": record["fields"]["input"],
+                    "content": record["fields"]["content"],
+                    "ai_score": ai_score,
+                    "ai_feedback": ai_feedback,
+                    "ai_improved_output": ai_improved_output,
+                    "human_score": human_score,
+                    "human_feedback": human_feedback,
+                    "human_improved_output": human_improved_output,
+                    "generator_prompt_id": record["metadata"]["generator_prompt_id"],
+                    "evaluator_prompt_id": record["metadata"]["evaluator_prompt_id"],
+                    "is_validated": record["metadata"]["is_validated"] == "True"
                 }
                 rows.append(row)
             
@@ -657,22 +546,22 @@ class ArgillaDatabase:
             if not self.client:
                 success = self.connect()
                 if not success:
-                    return {}
+                    return {"rounds": [], "prompts": [], "scores": [], "prompt_survivorship": {}, "moving_avg": []}
                     
             # Ensure datasets are initialized
-            if not all(k in self.datasets for k in ["outputs", "evaluations", "prompts"]):
+            if not all(k in self.datasets for k in ["records", "generator_prompts", "rounds"]):
                 success = self.initialize_datasets()
                 if not success:
-                    return {}
+                    return {"rounds": [], "prompts": [], "scores": [], "prompt_survivorship": {}, "moving_avg": []}
             
-            # Get all outputs with evaluations
-            all_records = self.datasets["outputs"].records().to_list(flatten=True)
+            # Get all records with evaluations
+            all_records = self.datasets["records"].records().to_list(flatten=True)
             
-            # Get all evaluations
-            all_evaluations = self.datasets["evaluations"].records().to_list(flatten=True)
+            # Get all generator prompts
+            all_generator_prompts = self.datasets["generator_prompts"].records().to_list(flatten=True)
             
-            # Get all prompts
-            all_prompts = self.datasets["prompts"].records().to_list(flatten=True)
+            # Get all rounds
+            all_rounds = self.datasets["rounds"].records().to_list(flatten=True)
             
             # Calculate metrics
             metrics = {
@@ -682,63 +571,58 @@ class ArgillaDatabase:
                 "prompt_survivorship": {}
             }
             
-            # Process prompts
-            for prompt in all_prompts:
-                prompt_id = prompt["metadata"]["prompt_id"]
-                generation = int(prompt["metadata"]["generation"])
-                parent_id = prompt["metadata"]["parent_prompt_id"]
-                
-                # Extract responses
-                avg_score = 0
-                survived = False
-                if "responses" in prompt:
-                    for response in prompt["responses"]:
-                        if response["question"]["name"] == "average_score":
-                            avg_score = float(response["value"])
-                        elif response["question"]["name"] == "survived":
-                            survived = bool(response["value"])
+            # Process generator prompts
+            for prompt in all_generator_prompts:
+                prompt_id = prompt["metadata"].get("prompt_id", "unknown")
+                parent_id = prompt["metadata"].get("parent_prompt_id", "root")
+                avg_score = float(prompt["metadata"].get("average_score", 0))
+                rounds_survived = int(prompt["metadata"].get("rounds_survived", 0))
+                is_active = prompt["metadata"].get("is_active", "false").lower() == "true"
                 
                 # Track prompt metrics
                 metrics["prompts"].append({
                     "id": prompt_id,
-                    "generation": generation,
                     "parent_id": parent_id,
                     "avg_score": avg_score,
-                    "survived": survived
+                    "rounds_survived": rounds_survived,
+                    "is_active": is_active,
+                    "content": prompt["fields"]["content"]
                 })
                 
                 # Track survivorship
                 if prompt_id not in metrics["prompt_survivorship"]:
                     metrics["prompt_survivorship"][prompt_id] = {
-                        "generations": [generation],
+                        "generations": [rounds_survived],
                         "scores": [avg_score]
                     }
                 else:
-                    metrics["prompt_survivorship"][prompt_id]["generations"].append(generation)
+                    metrics["prompt_survivorship"][prompt_id]["generations"].append(rounds_survived)
                     metrics["prompt_survivorship"][prompt_id]["scores"].append(avg_score)
             
-            # Process outputs and evaluations
-            for output in all_records:
-                output_id = output["metadata"]["output_id"]
-                round_num = int(output["metadata"]["round"])
-                prompt_id = output["metadata"]["prompt_id"]
+            # Process records and extract scores
+            for record in all_records:
+                round_id = record["metadata"].get("round_id", "unknown")
+                generator_prompt_id = record["metadata"].get("generator_prompt_id", "unknown")
                 
-                # Find evaluations for this output
-                output_evaluations = [e for e in all_evaluations if e["metadata"]["output_id"] == output_id]
-                if output_evaluations:
-                    # Use the latest evaluation
-                    latest_eval = max(output_evaluations, key=lambda e: e["metadata"]["timestamp"])
+                # Extract AI score from responses
+                ai_score = None
+                if "responses" in record:
+                    for response in record["responses"]:
+                        if response["question"]["name"] == "ai_score":
+                            ai_score = float(response["value"])
+                            break
+                
+                if ai_score is not None:
+                    # Find the round number for this record
+                    round_number = None
+                    for round_data in all_rounds:
+                        if round_data["metadata"].get("round_id", "") == round_id:
+                            round_number = int(round_data["fields"].get("number", 0))
+                            break
                     
-                    # Extract score from responses
-                    score = 0
-                    if "responses" in latest_eval:
-                        for response in latest_eval["responses"]:
-                            if response["question"]["name"] == "score":
-                                score = int(response["value"])
-                                break
-                    
-                    metrics["rounds"].append(round_num)
-                    metrics["scores"].append(score)
+                    if round_number is not None:
+                        metrics["rounds"].append(round_number)
+                        metrics["scores"].append(ai_score)
             
             # Calculate moving averages
             if metrics["scores"]:
@@ -752,7 +636,7 @@ class ArgillaDatabase:
             
         except Exception as e:
             logger.error(f"Error getting performance metrics: {str(e)}")
-            return {}
+            return {"rounds": [], "prompts": [], "scores": [], "prompt_survivorship": {}, "moving_avg": []}
     
     def get_prompt_history(self) -> Optional[pd.DataFrame]:
         """
@@ -762,45 +646,34 @@ class ArgillaDatabase:
             pd.DataFrame: DataFrame containing prompt history
         """
         try:
-            if not self.client or "prompts" not in self.datasets:
+            if not self.client or "generator_prompts" not in self.datasets:
                 success = self.initialize_datasets()
                 if not success:
                     return None
             
-            # Get all prompts
-            all_prompts = self.datasets["prompts"].records().to_list(flatten=True)
+            # Get all generator prompts
+            all_prompts = self.datasets["generator_prompts"].records().to_list(flatten=True)
             
             rows = []
             for prompt in all_prompts:
-                # Extract responses
-                avg_score = 0
-                survived = False
-                if "responses" in prompt:
-                    for response in prompt["responses"]:
-                        if response["question"]["name"] == "average_score":
-                            avg_score = float(response["value"])
-                        elif response["question"]["name"] == "survived":
-                            survived = bool(response["value"])
-                
                 row = {
-                    "prompt_id": prompt["metadata"]["prompt_id"],
-                    "generation": int(prompt["metadata"]["generation"]),
-                    "parent_id": prompt["metadata"].get("parent_prompt_id", "root"),
-                    "prompt_text": prompt["fields"]["prompt_text"],
-                    "model": prompt["fields"]["model"],
-                    "purpose": prompt["fields"]["purpose"],
-                    "avg_score": avg_score,
-                    "survived": survived,
-                    "timestamp": prompt["metadata"]["timestamp"]
+                    "prompt_id": prompt["metadata"].get("prompt_id", "unknown"),
+                    "parent_prompt_id": prompt["metadata"].get("parent_prompt_id", "root"),
+                    "content": prompt["fields"]["content"],
+                    "average_score": float(prompt["metadata"].get("average_score", 0)),
+                    "rounds_survived": int(prompt["metadata"].get("rounds_survived", 0)),
+                    "is_active": prompt["metadata"].get("is_active", "false").lower() == "true",
+                    "version": int(prompt["metadata"].get("version", 1)),
+                    "created_at": prompt["metadata"].get("created_at", datetime.now().isoformat())
                 }
                 rows.append(row)
             
             # Create the DataFrame
             df = pd.DataFrame(rows)
             
-            # Sort by generation and timestamp
+            # Sort by version and created_at
             if not df.empty:
-                df = df.sort_values(by=["generation", "timestamp"])
+                df = df.sort_values(by=["version", "created_at"])
             
             logger.info(f"Retrieved prompt history with {len(df)} records")
             return df
@@ -1066,4 +939,1374 @@ class ArgillaDatabase:
             
         except Exception as e:
             logger.error(f"Error getting latest evaluation: {str(e)}")
+            return None
+    
+    def _initialize_records_dataset(self) -> bool:
+        """
+        Initialize the Records dataset.
+        
+        Returns:
+            bool: True if initialization is successful, False otherwise
+        """
+        try:
+            # Check if dataset exists
+            try:
+                records_dataset = self.client.datasets("archer_records")
+                if records_dataset is not None:
+                    self.datasets["records"] = records_dataset
+                    logger.info("Found existing records dataset")
+                    return True
+                else:
+                    raise Exception("Dataset returned is None")
+            except Exception as e:
+                logger.info(f"Creating new records dataset: {str(e)}")
+                records_settings = rg.Settings(
+                    fields=[
+                        rg.TextField(name="input", title="Input Data"),
+                        rg.TextField(name="content", title="Generated Content")
+                    ],
+                    questions=[
+                        rg.RatingQuestion(
+                            name="ai_score",
+                            title="AI Quality Score",
+                            description="AI-generated quality score",
+                            values=[1, 2, 3, 4, 5]
+                        ),
+                        rg.TextQuestion(
+                            name="ai_feedback",
+                            title="AI Feedback",
+                            description="AI-generated feedback"
+                        ),
+                        rg.TextQuestion(
+                            name="ai_improved_output",
+                            title="AI Improved Output",
+                            description="AI-suggested improved version"
+                        ),
+                        rg.RatingQuestion(
+                            name="human_score",
+                            title="Human Quality Score",
+                            description="Human-generated quality score",
+                            values=[1, 2, 3, 4, 5]
+                        ),
+                        rg.TextQuestion(
+                            name="human_feedback",
+                            title="Human Feedback",
+                            description="Human-generated feedback"
+                        ),
+                        rg.TextQuestion(
+                            name="human_improved_output",
+                            title="Human Improved Output",
+                            description="Human-suggested improved version"
+                        )
+                    ],
+                    metadata=[
+                        rg.TermsMetadataProperty(name="generator_prompt_id", title="Generator Prompt ID"),
+                        rg.TermsMetadataProperty(name="evaluator_prompt_id", title="Evaluator Prompt ID"),
+                        rg.TermsMetadataProperty(name="round_id", title="Round ID"),
+                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp"),
+                        rg.TermsMetadataProperty(name="is_validated", title="Is Validated")
+                    ]
+                )
+                
+                logger.info("Creating archer_records dataset...")
+                new_dataset = rg.Dataset(name="archer_records", settings=records_settings)
+                new_dataset.create()
+                
+                # Verify creation worked by fetching again
+                self.datasets["records"] = self.client.datasets("archer_records")
+                if self.datasets["records"] is None:
+                    raise Exception("Failed to create archer_records dataset")
+                
+                logger.info("Created new records dataset")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error initializing records dataset: {str(e)}")
+            return False
+    
+    def _initialize_generator_prompts_dataset(self) -> bool:
+        """
+        Initialize the Generator Prompts dataset.
+        
+        Returns:
+            bool: True if initialization is successful, False otherwise
+        """
+        try:
+            # Check if dataset exists
+            try:
+                prompts_dataset = self.client.datasets("archer_generator_prompts")
+                if prompts_dataset is not None:
+                    self.datasets["generator_prompts"] = prompts_dataset
+                    logger.info("Found existing generator prompts dataset")
+                    return True
+                else:
+                    raise Exception("Dataset returned is None")
+            except Exception as e:
+                logger.info(f"Creating new generator prompts dataset: {str(e)}")
+                prompts_settings = rg.Settings(
+                    fields=[
+                        rg.TextField(name="content", title="Prompt Content")
+                    ],
+                    metadata=[
+                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                        rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
+                        rg.TermsMetadataProperty(name="average_score", title="Average Score"),
+                        rg.TermsMetadataProperty(name="rounds_survived", title="Rounds Survived"),
+                        rg.TermsMetadataProperty(name="is_active", title="Is Active"),
+                        rg.TermsMetadataProperty(name="created_at", title="Created At"),
+                        rg.TermsMetadataProperty(name="version", title="Version")
+                    ]
+                )
+                
+                logger.info("Creating archer_generator_prompts dataset...")
+                new_dataset = rg.Dataset(name="archer_generator_prompts", settings=prompts_settings)
+                new_dataset.create()
+                
+                # Verify creation worked by fetching again
+                self.datasets["generator_prompts"] = self.client.datasets("archer_generator_prompts")
+                if self.datasets["generator_prompts"] is None:
+                    raise Exception("Failed to create archer_generator_prompts dataset")
+                
+                logger.info("Created new generator prompts dataset")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error initializing generator prompts dataset: {str(e)}")
+            return False
+    
+    def _initialize_evaluator_prompts_dataset(self) -> bool:
+        """
+        Initialize the Evaluator Prompts dataset.
+        
+        Returns:
+            bool: True if initialization is successful, False otherwise
+        """
+        try:
+            # Check if dataset exists
+            try:
+                prompts_dataset = self.client.datasets("archer_evaluator_prompts")
+                if prompts_dataset is not None:
+                    self.datasets["evaluator_prompts"] = prompts_dataset
+                    logger.info("Found existing evaluator prompts dataset")
+                    return True
+                else:
+                    raise Exception("Dataset returned is None")
+            except Exception as e:
+                logger.info(f"Creating new evaluator prompts dataset: {str(e)}")
+                prompts_settings = rg.Settings(
+                    fields=[
+                        rg.TextField(name="content", title="Prompt Content")
+                    ],
+                    metadata=[
+                        rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
+                        rg.TermsMetadataProperty(name="is_active", title="Is Active"),
+                        rg.TermsMetadataProperty(name="created_at", title="Created At"),
+                        rg.TermsMetadataProperty(name="version", title="Version")
+                    ]
+                )
+                
+                logger.info("Creating archer_evaluator_prompts dataset...")
+                new_dataset = rg.Dataset(name="archer_evaluator_prompts", settings=prompts_settings)
+                new_dataset.create()
+                
+                # Verify creation worked by fetching again
+                self.datasets["evaluator_prompts"] = self.client.datasets("archer_evaluator_prompts")
+                if self.datasets["evaluator_prompts"] is None:
+                    raise Exception("Failed to create archer_evaluator_prompts dataset")
+                
+                logger.info("Created new evaluator prompts dataset")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error initializing evaluator prompts dataset: {str(e)}")
+            return False
+    
+    def _initialize_rounds_dataset(self) -> bool:
+        """
+        Initialize the Rounds dataset.
+        
+        Returns:
+            bool: True if initialization is successful, False otherwise
+        """
+        try:
+            # Check if dataset exists
+            try:
+                rounds_dataset = self.client.datasets("archer_rounds")
+                if rounds_dataset is not None:
+                    self.datasets["rounds"] = rounds_dataset
+                    logger.info("Found existing rounds dataset")
+                    return True
+                else:
+                    raise Exception("Dataset returned is None")
+            except Exception as e:
+                logger.info(f"Creating new rounds dataset: {str(e)}")
+                rounds_settings = rg.Settings(
+                    fields=[
+                        rg.TextField(name="number", title="Round Number"),
+                        rg.TextField(name="status", title="Status")
+                    ],
+                    metadata=[
+                        rg.TermsMetadataProperty(name="round_id", title="Round ID"),
+                        rg.TermsMetadataProperty(name="start_time", title="Start Time"),
+                        rg.TermsMetadataProperty(name="end_time", title="End Time"),
+                        rg.TermsMetadataProperty(name="metrics", title="Metrics")
+                    ]
+                )
+                
+                logger.info("Creating archer_rounds dataset...")
+                new_dataset = rg.Dataset(name="archer_rounds", settings=rounds_settings)
+                new_dataset.create()
+                
+                # Verify creation worked by fetching again
+                self.datasets["rounds"] = self.client.datasets("archer_rounds")
+                if self.datasets["rounds"] is None:
+                    raise Exception("Failed to create archer_rounds dataset")
+                
+                logger.info("Created new rounds dataset")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error initializing rounds dataset: {str(e)}")
+            return False
+    
+    def _initialize_prompt_lineage_dataset(self) -> bool:
+        """
+        Initialize the Prompt Lineage dataset.
+        
+        Returns:
+            bool: True if initialization is successful, False otherwise
+        """
+        try:
+            # Check if dataset exists
+            try:
+                lineage_dataset = self.client.datasets("archer_prompt_lineage")
+                if lineage_dataset is not None:
+                    self.datasets["prompt_lineage"] = lineage_dataset
+                    logger.info("Found existing prompt lineage dataset")
+                    return True
+                else:
+                    raise Exception("Dataset returned is None")
+            except Exception as e:
+                logger.info(f"Creating new prompt lineage dataset: {str(e)}")
+                lineage_settings = rg.Settings(
+                    fields=[
+                        rg.TextField(name="change_reason", title="Change Reason")
+                    ],
+                    metadata=[
+                        rg.TermsMetadataProperty(name="lineage_id", title="Lineage ID"),
+                        rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
+                        rg.TermsMetadataProperty(name="child_prompt_id", title="Child Prompt ID"),
+                        rg.TermsMetadataProperty(name="round_id", title="Round ID"),
+                        rg.TermsMetadataProperty(name="timestamp", title="Timestamp")
+                    ]
+                )
+                
+                logger.info("Creating archer_prompt_lineage dataset...")
+                new_dataset = rg.Dataset(name="archer_prompt_lineage", settings=lineage_settings)
+                new_dataset.create()
+                
+                # Verify creation worked by fetching again
+                self.datasets["prompt_lineage"] = self.client.datasets("archer_prompt_lineage")
+                if self.datasets["prompt_lineage"] is None:
+                    raise Exception("Failed to create archer_prompt_lineage dataset")
+                
+                logger.info("Created new prompt lineage dataset")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error initializing prompt lineage dataset: {str(e)}")
+            return False
+    
+    def store_record(self, input_data: str, content: str, 
+                     generator_prompt_id: str, evaluator_prompt_id: str, 
+                     round_id: str) -> Optional[str]:
+        """
+        Store a record in the records dataset.
+        
+        Args:
+            input_data: The input data used to generate content
+            content: The generated content
+            generator_prompt_id: ID of the generator prompt used
+            evaluator_prompt_id: ID of the evaluator prompt used
+            round_id: ID of the current round
+            
+        Returns:
+            str: ID of the stored record, or None if storage failed
+        """
+        try:
+            if not self.client or "records" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return None
+            
+            # Create a unique ID for this record
+            record_id = str(uuid.uuid4())
+            
+            # Create a record with properly structured data
+            record = rg.Record(
+                fields={
+                    "input": input_data,
+                    "content": content
+                },
+                metadata={
+                    "generator_prompt_id": generator_prompt_id,
+                    "evaluator_prompt_id": evaluator_prompt_id,
+                    "round_id": round_id,
+                    "timestamp": datetime.now().isoformat(),
+                    "is_validated": "False"
+                }
+            )
+            
+            # Ensure the dataset reference is valid and log the record
+            try:
+                dataset = self.datasets["records"]
+                dataset.records.log([record])
+                logger.info(f"Stored record with ID: {record_id}")
+                return record_id
+            except Exception as e:
+                logger.error(f"Error logging record to dataset: {str(e)}")
+                
+                # Try to reinitialize and retry if the initial attempt failed
+                logger.info("Attempting to reconnect and retry...")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["records"].records.log([record])
+                        logger.info(f"Successfully stored record after retry with ID: {record_id}")
+                        return record_id
+                    except Exception as retry_error:
+                        logger.error(f"Retry failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error storing record: {str(e)}")
+            return None
+    
+    def update_record_evaluation(self, record_id: str, ai_score: float, 
+                               ai_feedback: str, ai_improved_output: str) -> bool:
+        """
+        Update a record with AI evaluation data.
+        
+        Args:
+            record_id: ID of the record to update
+            ai_score: AI-generated quality score (1-5)
+            ai_feedback: AI-generated feedback
+            ai_improved_output: AI-suggested improved version
+            
+        Returns:
+            bool: True if update is successful, False otherwise
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return False
+            
+            # Check if records dataset exists and is properly initialized
+            if "records" not in self.datasets or self.datasets["records"] is None:
+                logger.info("Records dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return False
+            
+            # Get the existing record
+            record = self._get_record(record_id)
+            if not record:
+                logger.error(f"Record with ID {record_id} not found")
+                return False
+            
+            # Create responses
+            responses = [
+                rg.Response(question_name="ai_score", value=ai_score, user_id=self.user_id),
+                rg.Response(question_name="ai_feedback", value=ai_feedback, user_id=self.user_id),
+                rg.Response(question_name="ai_improved_output", value=ai_improved_output, user_id=self.user_id)
+            ]
+            
+            # Update the record
+            updated_record = rg.Record(
+                id=record.get("id"),
+                responses=responses
+            )
+            
+            # Add the updated record to the dataset
+            try:
+                self.datasets["records"].records.log([updated_record])
+                logger.info(f"Updated record with AI evaluation: {record_id}")
+                return True
+            except Exception as log_error:
+                logger.error(f"Error logging updated record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["records"].records.log([updated_record])
+                        logger.info(f"Successfully updated record after retry")
+                        return True
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return False
+            
+        except Exception as e:
+            logger.error(f"Error updating record evaluation: {str(e)}")
+            return False
+    
+    def update_record_human_feedback(self, record_id: str, human_score: float, 
+                                   human_feedback: str, human_improved_output: str) -> bool:
+        """
+        Update a record with human feedback data.
+        
+        Args:
+            record_id: ID of the record to update
+            human_score: Human-assigned quality score (1-5)
+            human_feedback: Human feedback
+            human_improved_output: Human-suggested improved version
+            
+        Returns:
+            bool: True if update is successful, False otherwise
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return False
+            
+            # Check if records dataset exists and is properly initialized
+            if "records" not in self.datasets or self.datasets["records"] is None:
+                logger.info("Records dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return False
+            
+            # Get the existing record
+            record = self._get_record(record_id)
+            if not record:
+                logger.error(f"Record with ID {record_id} not found")
+                return False
+            
+            # Create responses
+            responses = [
+                rg.Response(question_name="human_score", value=human_score, user_id=self.user_id),
+                rg.Response(question_name="human_feedback", value=human_feedback, user_id=self.user_id),
+                rg.Response(question_name="human_improved_output", value=human_improved_output, user_id=self.user_id)
+            ]
+            
+            # Update the record
+            updated_record = rg.Record(
+                id=record.get("id"),
+                responses=responses,
+                metadata={
+                    "is_validated": "True"
+                }
+            )
+            
+            # Add the updated record to the dataset
+            try:
+                self.datasets["records"].records.log([updated_record])
+                logger.info(f"Updated record with human feedback: {record_id}")
+                return True
+            except Exception as log_error:
+                logger.error(f"Error logging updated record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["records"].records.log([updated_record])
+                        logger.info(f"Successfully updated record after retry")
+                        return True
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return False
+            
+        except Exception as e:
+            logger.error(f"Error updating record with human feedback: {str(e)}")
+            return False
+    
+    def store_generator_prompt(self, content: str, parent_prompt_id: Optional[str] = None, 
+                             version: int = 1) -> Optional[str]:
+        """
+        Store a generator prompt in the generator_prompts dataset.
+        
+        Args:
+            content: The prompt content
+            parent_prompt_id: ID of the parent prompt (if any)
+            version: Version number of the prompt
+            
+        Returns:
+            str: ID of the stored prompt, or None if storage failed
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if generator_prompts dataset exists and is properly initialized
+            if "generator_prompts" not in self.datasets or self.datasets["generator_prompts"] is None:
+                logger.info("Generator prompts dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Create a unique ID for this prompt
+            prompt_id = str(uuid.uuid4())
+            
+            # Create a record
+            record = rg.Record(
+                fields={
+                    "content": content
+                },
+                metadata={
+                    "prompt_id": prompt_id,
+                    "parent_prompt_id": parent_prompt_id or "root",
+                    "average_score": "0.0",
+                    "rounds_survived": "0",
+                    "is_active": "True",
+                    "created_at": datetime.now().isoformat(),
+                    "version": str(version)
+                }
+            )
+            
+            # Add the record to the dataset
+            try:
+                self.datasets["generator_prompts"].records.log([record])
+                logger.info(f"Stored generator prompt with ID: {prompt_id}")
+                return prompt_id
+            except Exception as log_error:
+                logger.error(f"Error logging generator prompt record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry generator prompt logging")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["generator_prompts"].records.log([record])
+                        logger.info(f"Successfully stored generator prompt after retry")
+                        return prompt_id
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error storing generator prompt: {str(e)}")
+            return None
+    
+    def store_evaluator_prompt(self, content: str, version: int = 1) -> Optional[str]:
+        """
+        Store an evaluator prompt in the evaluator_prompts dataset.
+        
+        Args:
+            content: The prompt content
+            version: Version number of the prompt
+            
+        Returns:
+            str: ID of the stored prompt, or None if storage failed
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if evaluator_prompts dataset exists and is properly initialized
+            if "evaluator_prompts" not in self.datasets or self.datasets["evaluator_prompts"] is None:
+                logger.info("Evaluator prompts dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Create a unique ID for this prompt
+            prompt_id = str(uuid.uuid4())
+            
+            # Create a record
+            record = rg.Record(
+                fields={
+                    "content": content
+                },
+                metadata={
+                    "prompt_id": prompt_id,
+                    "is_active": "True",
+                    "created_at": datetime.now().isoformat(),
+                    "version": str(version)
+                }
+            )
+            
+            # Add the record to the dataset
+            try:
+                self.datasets["evaluator_prompts"].records.log([record])
+                logger.info(f"Stored evaluator prompt with ID: {prompt_id}")
+                return prompt_id
+            except Exception as log_error:
+                logger.error(f"Error logging evaluator prompt record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry evaluator prompt logging")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["evaluator_prompts"].records.log([record])
+                        logger.info(f"Successfully stored evaluator prompt after retry")
+                        return prompt_id
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error storing evaluator prompt: {str(e)}")
+            return None
+    
+    def update_generator_prompt_performance(self, prompt_id: str, avg_score: float, 
+                                          rounds_survived: int, is_active: bool) -> bool:
+        """
+        Update the performance metrics for a generator prompt.
+        
+        Args:
+            prompt_id: ID of the prompt
+            avg_score: Average score across all outputs
+            rounds_survived: Number of rounds the prompt has survived
+            is_active: Whether the prompt is active
+            
+        Returns:
+            bool: True if update is successful, False otherwise
+        """
+        try:
+            if not self.client or "generator_prompts" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return False
+            
+            # Get the prompt record
+            prompt_filter = rg.Filter(("metadata.prompt_id", "==", prompt_id))
+            query = rg.Query(filter=prompt_filter)
+            records = self.datasets["generator_prompts"].records(query=query).to_list(flatten=True)
+            
+            if not records:
+                logger.error(f"Generator prompt with ID {prompt_id} not found")
+                return False
+            
+            # Update the record
+            record = records[0]
+            updated_record = rg.Record(
+                id=record["id"],
+                metadata={
+                    "average_score": str(avg_score),
+                    "rounds_survived": str(rounds_survived),
+                    "is_active": str(is_active).lower()
+                }
+            )
+            
+            # Add the updated record to the dataset
+            try:
+                self.datasets["generator_prompts"].records.log([updated_record])
+                logger.info(f"Updated performance for generator prompt ID: {prompt_id}")
+                return True
+            except Exception as log_error:
+                logger.error(f"Error updating generator prompt: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["generator_prompts"].records.log([updated_record])
+                        logger.info(f"Successfully updated generator prompt after retry")
+                        return True
+                    except Exception as retry_error:
+                        logger.error(f"Retry update failed: {str(retry_error)}")
+                
+                return False
+            
+        except Exception as e:
+            logger.error(f"Error updating generator prompt performance: {str(e)}")
+            return False
+    
+    def update_evaluator_prompt_status(self, prompt_id: str, is_active: bool) -> bool:
+        """
+        Update the status of an evaluator prompt.
+        
+        Args:
+            prompt_id: ID of the prompt
+            is_active: Whether the prompt is active
+            
+        Returns:
+            bool: True if update is successful, False otherwise
+        """
+        try:
+            if not self.client or "evaluator_prompts" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return False
+            
+            # Get the prompt record
+            prompt_filter = rg.Filter(("metadata.prompt_id", "==", prompt_id))
+            query = rg.Query(filter=prompt_filter)
+            records = self.datasets["evaluator_prompts"].records(query=query).to_list(flatten=True)
+            
+            if not records:
+                logger.error(f"Evaluator prompt with ID {prompt_id} not found")
+                return False
+            
+            # Update the record
+            record = records[0]
+            updated_record = rg.Record(
+                id=record["id"],
+                metadata={
+                    "is_active": str(is_active).lower()
+                }
+            )
+            
+            # Add the updated record to the dataset
+            try:
+                self.datasets["evaluator_prompts"].records.log([updated_record])
+                logger.info(f"Updated status for evaluator prompt ID: {prompt_id}")
+                return True
+            except Exception as log_error:
+                logger.error(f"Error updating evaluator prompt: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["evaluator_prompts"].records.log([updated_record])
+                        logger.info(f"Successfully updated evaluator prompt after retry")
+                        return True
+                    except Exception as retry_error:
+                        logger.error(f"Retry update failed: {str(retry_error)}")
+                
+                return False
+            
+        except Exception as e:
+            logger.error(f"Error updating evaluator prompt status: {str(e)}")
+            return False
+    
+    def create_round(self, round_number: int) -> Optional[str]:
+        """
+        Create a new round in the rounds dataset.
+        
+        Args:
+            round_number: The round number
+            
+        Returns:
+            str: ID of the created round, or None if creation failed
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if rounds dataset exists and is properly initialized
+            if "rounds" not in self.datasets or self.datasets["rounds"] is None:
+                logger.info("Rounds dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Create a unique ID for this round
+            round_id = str(uuid.uuid4())
+            
+            # Create a record
+            record = rg.Record(
+                fields={
+                    "number": str(round_number),
+                    "status": "in_progress"
+                },
+                metadata={
+                    "round_id": round_id,
+                    "start_time": datetime.now().isoformat(),
+                    "end_time": "",
+                    "metrics": "{}"
+                }
+            )
+            
+            # Add the record to the dataset
+            try:
+                self.datasets["rounds"].records.log([record])
+                logger.info(f"Created round with ID: {round_id}")
+                return round_id
+            except Exception as log_error:
+                logger.error(f"Error logging round record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry round creation")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["rounds"].records.log([record])
+                        logger.info(f"Successfully created round after retry")
+                        return round_id
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error creating round: {str(e)}")
+            return None
+    
+    def update_round(self, round_id: str, status: str = None, 
+                   metrics: Dict[str, Any] = None) -> bool:
+        """
+        Update a round with status and metrics.
+        
+        Args:
+            round_id: ID of the round to update
+            status: Status of the round ('in_progress' or 'completed')
+            metrics: Dictionary of metrics for the round
+            
+        Returns:
+            bool: True if update is successful, False otherwise
+        """
+        try:
+            if not self.client or "rounds" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return False
+            
+            # Get the round record
+            round_filter = rg.Filter(("metadata.round_id", "==", round_id))
+            query = rg.Query(filter=round_filter)
+            records = self.datasets["rounds"].records(query=query).to_list(flatten=True)
+            
+            if not records:
+                logger.error(f"Round with ID {round_id} not found")
+                return False
+            
+            # Prepare updates
+            updates = {}
+            
+            if status:
+                updates["status"] = status
+            
+            metadata_updates = {}
+            
+            if status == "completed":
+                metadata_updates["end_time"] = datetime.now().isoformat()
+            
+            if metrics:
+                metadata_updates["metrics"] = json.dumps(metrics)
+            
+            # Update the record
+            record = records[0]
+            updated_record = rg.Record(
+                id=record["id"]
+            )
+            
+            if updates:
+                updated_record.fields = updates
+                
+            if metadata_updates:
+                updated_record.metadata = metadata_updates
+            
+            # Add the updated record to the dataset
+            try:
+                self.datasets["rounds"].records.log([updated_record])
+                logger.info(f"Updated round with ID: {round_id}")
+                return True
+            except Exception as log_error:
+                logger.error(f"Error updating round: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["rounds"].records.log([updated_record])
+                        logger.info(f"Successfully updated round after retry")
+                        return True
+                    except Exception as retry_error:
+                        logger.error(f"Retry update failed: {str(retry_error)}")
+                
+                return False
+            
+        except Exception as e:
+            logger.error(f"Error updating round: {str(e)}")
+            return False
+    
+    def store_prompt_lineage(self, parent_prompt_id: str, child_prompt_id: str, 
+                           round_id: str, change_reason: str) -> Optional[str]:
+        """
+        Store prompt lineage information in the prompt_lineage dataset.
+        
+        Args:
+            parent_prompt_id: ID of the parent prompt
+            child_prompt_id: ID of the child prompt
+            round_id: ID of the round in which the change occurred
+            change_reason: Reason for the change
+            
+        Returns:
+            str: ID of the stored lineage record, or None if storage failed
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if prompt_lineage dataset exists and is properly initialized
+            if "prompt_lineage" not in self.datasets or self.datasets["prompt_lineage"] is None:
+                logger.info("Prompt lineage dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Create a unique ID for this lineage record
+            lineage_id = str(uuid.uuid4())
+            
+            # Create a record
+            record = rg.Record(
+                fields={
+                    "change_reason": change_reason
+                },
+                metadata={
+                    "lineage_id": lineage_id,
+                    "parent_prompt_id": parent_prompt_id,
+                    "child_prompt_id": child_prompt_id,
+                    "round_id": round_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+            
+            # Add the record to the dataset
+            try:
+                self.datasets["prompt_lineage"].records.log([record])
+                logger.info(f"Stored prompt lineage with ID: {lineage_id}")
+                return lineage_id
+            except Exception as log_error:
+                logger.error(f"Error logging prompt lineage record: {str(log_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry prompt lineage logging")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        self.datasets["prompt_lineage"].records.log([record])
+                        logger.info(f"Successfully stored prompt lineage after retry")
+                        return lineage_id
+                    except Exception as retry_error:
+                        logger.error(f"Retry logging failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error storing prompt lineage: {str(e)}")
+            return None
+    
+    def _get_record(self, record_id: str) -> Optional[Dict]:
+        """
+        Helper method to get a record by ID.
+        
+        Args:
+            record_id: ID of the record
+            
+        Returns:
+            Dict: Record data, or None if not found
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if records dataset exists and is properly initialized
+            if "records" not in self.datasets or self.datasets["records"] is None:
+                logger.info("Records dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+                
+            # Confirm that we actually have the dataset now
+            if self.datasets["records"] is None:
+                logger.error("Records dataset still not available after initialization")
+                return None
+            
+            # Query for the record by ID
+            try:
+                record = self.datasets["records"].record(record_id)
+                if record is None:
+                    logger.warning(f"No record found with ID: {record_id}")
+                    return None
+                    
+                # Return the record data
+                return record
+            except Exception as query_error:
+                logger.error(f"Error querying for record: {str(query_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry record query")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        record = self.datasets["records"].record(record_id)
+                        return record
+                    except Exception as retry_error:
+                        logger.error(f"Retry query failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error getting record: {str(e)}")
+            return None
+    
+    def _get_generator_prompt(self, prompt_id: str) -> Optional[Dict]:
+        """
+        Helper method to get a generator prompt by ID.
+        
+        Args:
+            prompt_id: ID of the prompt
+            
+        Returns:
+            Dict: Prompt data, or None if not found
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if generator_prompts dataset exists and is properly initialized
+            if "generator_prompts" not in self.datasets or self.datasets["generator_prompts"] is None:
+                logger.info("Generator prompts dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Query for the prompt using Filter
+            prompt_filter = rg.Filter(("metadata.prompt_id", "==", prompt_id))
+            query = rg.Query(filter=prompt_filter)
+            
+            try:
+                records = self.datasets["generator_prompts"].records(query=query).to_list(flatten=True)
+                
+                if not records:
+                    logger.warning(f"No generator prompt found with ID: {prompt_id}")
+                    return None
+                    
+                # Return the first matching record
+                return records[0]
+            except Exception as query_error:
+                logger.error(f"Error querying for generator prompt: {str(query_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry generator prompt query")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        records = self.datasets["generator_prompts"].records(query=query).to_list(flatten=True)
+                        return records[0] if records else None
+                    except Exception as retry_error:
+                        logger.error(f"Retry query failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error getting generator prompt: {str(e)}")
+            return None
+    
+    def _get_evaluator_prompt(self, prompt_id: str) -> Optional[Dict]:
+        """
+        Helper method to get an evaluator prompt by ID.
+        
+        Args:
+            prompt_id: ID of the prompt
+            
+        Returns:
+            Dict: Prompt data, or None if not found
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if evaluator_prompts dataset exists and is properly initialized
+            if "evaluator_prompts" not in self.datasets or self.datasets["evaluator_prompts"] is None:
+                logger.info("Evaluator prompts dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Query for the prompt using Filter
+            prompt_filter = rg.Filter(("metadata.prompt_id", "==", prompt_id))
+            query = rg.Query(filter=prompt_filter)
+            
+            try:
+                records = self.datasets["evaluator_prompts"].records(query=query).to_list(flatten=True)
+                
+                if not records:
+                    logger.warning(f"No evaluator prompt found with ID: {prompt_id}")
+                    return None
+                    
+                # Return the first matching record
+                return records[0]
+            except Exception as query_error:
+                logger.error(f"Error querying for evaluator prompt: {str(query_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry evaluator prompt query")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        records = self.datasets["evaluator_prompts"].records(query=query).to_list(flatten=True)
+                        return records[0] if records else None
+                    except Exception as retry_error:
+                        logger.error(f"Retry query failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error getting evaluator prompt: {str(e)}")
+            return None
+    
+    def _get_round(self, round_id: str) -> Optional[Dict]:
+        """
+        Helper method to get a round by ID.
+        
+        Args:
+            round_id: ID of the round
+            
+        Returns:
+            Dict: Round data, or None if not found
+        """
+        try:
+            # First ensure we're connected to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if rounds dataset exists and is properly initialized
+            if "rounds" not in self.datasets or self.datasets["rounds"] is None:
+                logger.info("Rounds dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Query for the round using Filter
+            round_filter = rg.Filter(("metadata.round_id", "==", round_id))
+            query = rg.Query(filter=round_filter)
+            
+            try:
+                records = self.datasets["rounds"].records(query=query).to_list(flatten=True)
+                
+                if not records:
+                    logger.warning(f"No round found with ID: {round_id}")
+                    return None
+                    
+                # Return the first matching record
+                return records[0]
+            except Exception as query_error:
+                logger.error(f"Error querying for round: {str(query_error)}")
+                
+                # Try to reconnect and retry
+                logger.info("Attempting to reconnect and retry round query")
+                if self.connect() and self.initialize_datasets():
+                    try:
+                        records = self.datasets["rounds"].records(query=query).to_list(flatten=True)
+                        return records[0] if records else None
+                    except Exception as retry_error:
+                        logger.error(f"Retry query failed: {str(retry_error)}")
+                
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error getting round: {str(e)}")
+            return None
+    
+    def get_active_evaluator_prompts(self) -> List[Dict[str, Any]]:
+        """
+        Get the current active evaluator prompts.
+        
+        Returns:
+            List[Dict[str, Any]]: List of prompt dictionaries
+        """
+        try:
+            if not self.client or "evaluator_prompts" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return []
+            
+            # Query for active prompts
+            active_filter = rg.Filter(("metadata.is_active", "==", "true"))
+            query = rg.Query(filter=active_filter)
+            active_prompts = self.datasets["evaluator_prompts"].records(query=query).to_list(flatten=True)
+            
+            # Extract prompt data
+            prompt_data = []
+            for prompt in active_prompts:
+                prompt_data.append({
+                    "id": prompt["metadata"].get("prompt_id", "unknown"),
+                    "content": prompt["fields"]["content"],
+                    "version": int(prompt["metadata"].get("version", 1)),
+                    "created_at": prompt["metadata"].get("created_at", datetime.now().isoformat())
+                })
+            
+            logger.info(f"Retrieved {len(prompt_data)} active evaluator prompts")
+            return prompt_data
+            
+        except Exception as e:
+            logger.error(f"Error getting active evaluator prompts: {str(e)}")
+            return []
+    
+    def get_round_metrics(self, round_id: str) -> Dict[str, Any]:
+        """
+        Get metrics for a specific round.
+        
+        Args:
+            round_id: ID of the round
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing round metrics
+        """
+        try:
+            if not self.client or "rounds" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return {}
+            
+            # Query for the round
+            round_filter = rg.Filter(("metadata.round_id", "==", round_id))
+            query = rg.Query(filter=round_filter)
+            rounds = self.datasets["rounds"].records(query=query).to_list(flatten=True)
+            
+            if not rounds:
+                logger.warning(f"Round with ID {round_id} not found")
+                return {}
+            
+            # Get the metrics from the round's metadata
+            round_data = rounds[0]
+            metrics_json = round_data["metadata"].get("metrics", "{}")
+            
+            try:
+                metrics = json.loads(metrics_json)
+            except json.JSONDecodeError:
+                logger.error(f"Error decoding metrics JSON for round {round_id}")
+                metrics = {}
+            
+            logger.info(f"Retrieved metrics for round ID: {round_id}")
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"Error getting round metrics: {str(e)}")
+            return {}
+    
+    def get_active_generator_prompts(self, top_n: int = 4) -> List[Dict[str, Any]]:
+        """
+        Get the current active generator prompts.
+        
+        Args:
+            top_n: Number of top prompts to return
+            
+        Returns:
+            List[Dict[str, Any]]: List of prompt dictionaries
+        """
+        try:
+            if not self.client or "generator_prompts" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return []
+            
+            # Query for active prompts
+            active_filter = rg.Filter(("metadata.is_active", "==", "true"))
+            query = rg.Query(filter=active_filter)
+            active_prompts = self.datasets["generator_prompts"].records(query=query).to_list(flatten=True)
+            
+            # Extract prompt data
+            prompt_data = []
+            for prompt in active_prompts:
+                prompt_data.append({
+                    "id": prompt["metadata"].get("prompt_id", "unknown"),
+                    "content": prompt["fields"]["content"],
+                    "average_score": float(prompt["metadata"].get("average_score", 0)),
+                    "rounds_survived": int(prompt["metadata"].get("rounds_survived", 0)),
+                    "version": int(prompt["metadata"].get("version", 1)),
+                    "parent_prompt_id": prompt["metadata"].get("parent_prompt_id", "root")
+                })
+            
+            # Sort by average score (descending) and take top N
+            prompt_data.sort(key=lambda x: x["average_score"], reverse=True)
+            top_prompts = prompt_data[:top_n]
+            
+            logger.info(f"Retrieved top {len(top_prompts)} active generator prompts")
+            return top_prompts
+            
+        except Exception as e:
+            logger.error(f"Error getting active generator prompts: {str(e)}")
+            return []
+    
+    def get_prompt_lineage(self) -> Optional[pd.DataFrame]:
+        """
+        Get the lineage information for prompts.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing prompt lineage information
+        """
+        try:
+            if not self.client or "prompt_lineage" not in self.datasets:
+                success = self.initialize_datasets()
+                if not success:
+                    return None
+            
+            # Get all lineage records
+            all_lineage = self.datasets["prompt_lineage"].records().to_list(flatten=True)
+            
+            rows = []
+            for lineage in all_lineage:
+                row = {
+                    "lineage_id": lineage["metadata"].get("lineage_id", "unknown"),
+                    "parent_prompt_id": lineage["metadata"].get("parent_prompt_id", "unknown"),
+                    "child_prompt_id": lineage["metadata"].get("child_prompt_id", "unknown"),
+                    "round_id": lineage["metadata"].get("round_id", "unknown"),
+                    "change_reason": lineage["fields"]["change_reason"],
+                    "timestamp": lineage["metadata"].get("timestamp", datetime.now().isoformat())
+                }
+                rows.append(row)
+            
+            # Create the DataFrame
+            df = pd.DataFrame(rows)
+            
+            # Sort by timestamp
+            if not df.empty:
+                df = df.sort_values(by=["timestamp"])
+            
+            logger.info(f"Retrieved prompt lineage with {len(df)} records")
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error getting prompt lineage: {str(e)}")
             return None

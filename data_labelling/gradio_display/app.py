@@ -277,166 +277,261 @@ class DanielsonArcherApp:
             logger.error(f"Error saving to database: {str(e)}")
             return False
     
-    def trigger_optimization(self) -> str:
+    def trigger_backward_pass(self) -> bool:
         """
-        Trigger the optimization process in Archer (backward pass).
+        Trigger the backward pass in the Archer system.
         
         Returns:
-            str: Status message
+            bool: True if backward pass is successful, False otherwise
         """
+        logger = logging.getLogger(__name__)
+        logger.info("Triggering backward pass")
+        
         try:
-            if not self.archer:
+            if self.archer is None:
+                logger.warning("No Archer instance available. Skipping backward pass.")
+                # Increment round number anyway for simulation
                 self.current_round += 1
-                return f"No Archer instance available. Simulated optimization. Advanced to round {self.current_round}."
+                return True
             
-            # Run backward pass
-            evaluations = []  # This would normally come from the database
-            self.archer.run_backward_pass(evaluations)
+            # Get the evaluations from the database
+            logger.info("Fetching validated evaluations from database")
+            evaluations = self.db.get_validated_evaluations(limit=10)
             
-            # Increment round number
+            if not evaluations:
+                logger.warning("No validated evaluations found for backward pass")
+                self.current_round += 1
+                return True
+                
+            logger.info(f"Retrieved {len(evaluations)} evaluations from database")
+            
+            # Transform database evaluations into the format Archer expects
+            # Archer expects: [(Prompt, generated_content, evaluation_dict), ...]
+            logger.info("Transforming evaluations for backward pass")
+            archer_evaluations = []
+            
+            for evaluation in evaluations:
+                try:
+                    # Extract data from evaluation
+                    content = evaluation.get("content", "")
+                    
+                    # Parse input data (should be JSON with component_id and input)
+                    input_data = {}
+                    try:
+                        input_str = evaluation.get("input", "{}")
+                        input_data = json.loads(input_str)
+                    except Exception as e:
+                        logger.error(f"Error parsing input data: {str(e)}")
+                        input_data = {"component_id": "1a", "input": ""}
+                    
+                    # Create a prompt object from one of the current active prompts
+                    # This is a simplification - ideally we'd retrieve the exact prompt used
+                    if self.archer.active_prompts:
+                        prompt = self.archer.active_prompts[0]
+                    else:
+                        prompt = Prompt("Generate an evaluation for component {component_id} based on {input}")
+                    
+                    # Create evaluation dict
+                    eval_dict = {
+                        "score": evaluation.get("score", 3),
+                        "feedback": evaluation.get("feedback", ""),
+                        "improved_output": evaluation.get("perfect_output", "")
+                    }
+                    
+                    # Add to archer evaluations
+                    archer_evaluations.append((prompt, content, eval_dict))
+                    logger.debug(f"Added evaluation: score={eval_dict['score']}")
+                except Exception as e:
+                    logger.error(f"Error processing evaluation: {str(e)}")
+            
+            if not archer_evaluations:
+                logger.warning("No valid evaluations to process after transformation")
+                self.current_round += 1
+                return True
+            
+            # Trigger the backward pass in the Archer system
+            logger.info(f"Calling Archer backward pass with {len(archer_evaluations)} evaluations")
+            logger.debug("First evaluation prompt: " + archer_evaluations[0][0].content[:50] + "...")
+            logger.debug("First evaluation score: " + str(archer_evaluations[0][2].get("score", "N/A")))
+            
+            # Call the backward pass
+            self.archer.run_backward_pass(archer_evaluations)
+            
+            # Increment the round number
             self.current_round += 1
             
-            return f"Optimization completed. Advanced to round {self.current_round}."
+            logger.info(f"Backward pass completed. New round: {self.current_round}")
+            return True
+            
         except Exception as e:
-            logger.error(f"Error in optimization: {str(e)}")
-            return f"Error in optimization: {str(e)}"
+            logger.error(f"Error triggering backward pass: {str(e)}", exc_info=True)
+            return False
     
     def create_interface(self) -> gr.Blocks:
         """
-        Create the Gradio interface.
+        Create the Gradio interface components.
         
         Returns:
-            gr.Blocks: The Gradio Blocks interface
+            gr.Blocks: The configured Gradio interface
         """
-        with gr.Blocks(title="Danielson Framework - Archer Optimization") as app:
-            gr.Markdown("# Danielson Framework Component Summary Optimization")
-            gr.Markdown("This application uses Archer to optimize prompts for generating Danielson framework component summaries.")
+        with gr.Blocks(title="Danielson Evaluation System") as app:
+            gr.Markdown("# Danielson Framework Evaluation System")
+            gr.Markdown("Generate and evaluate Danielson component evaluations with AI assistance.")
             
-            with gr.Row():
-                with gr.Column(scale=2):
-                    low_inference_notes = gr.Textbox(
-                        label="Low Inference Notes",
-                        placeholder="Enter or generate low inference notes...",
-                        lines=10
-                    )
+            with gr.Tab("Generate & Evaluate"):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        low_inference_notes = gr.Textbox(
+                            label="Low Inference Notes",
+                            placeholder="Enter classroom observation notes here...",
+                            lines=8
+                        )
+                        component_id = gr.Dropdown(
+                            label="Danielson Component",
+                            choices=DANIELSON_COMPONENTS,
+                            value="1a"
+                        )
+                        gen_input_btn = gr.Button("Generate Sample Input")
+                        gen_btn = gr.Button("Generate Summary", variant="primary")
                     
-                    component_id = gr.Dropdown(
-                        label="Danielson Component",
-                        choices=DANIELSON_COMPONENTS,
-                        value="1a"
-                    )
-                    
-                    with gr.Row():
-                        generate_input_btn = gr.Button("Generate Random Input")
-                        generate_summary_btn = gr.Button("Generate Summary", variant="primary")
-                
-                with gr.Column(scale=3):
-                    summary_output = gr.Textbox(
-                        label="Generated Summary",
-                        placeholder="The generated summary will appear here...",
-                        lines=15
-                    )
-                    
-                    with gr.Row():
+                    with gr.Column(scale=3):
+                        generated_content = gr.Textbox(
+                            label="Generated Evaluation",
+                            placeholder="AI-generated evaluation will appear here...",
+                            lines=10
+                        )
                         score = gr.Slider(
-                            label="Quality Score",
+                            label="Quality Score (1-5)",
                             minimum=1,
                             maximum=5,
                             step=1,
                             value=3
                         )
-                    
-                    feedback = gr.Textbox(
-                        label="Feedback",
-                        placeholder="Provide feedback on how to improve the summary...",
-                        lines=5
+                        feedback = gr.Textbox(
+                            label="Feedback",
+                            placeholder="Provide feedback on the quality of the generated evaluation...",
+                            lines=3
+                        )
+                        perfect_output = gr.Textbox(
+                            label="Perfect Output Example",
+                            placeholder="Example of ideal output will appear here after generation...",
+                            lines=5
+                        )
+                        save_btn = gr.Button("Save Evaluation", variant="primary")
+                        
+                # Add a section to display the current prompts
+                with gr.Accordion("Current Active Prompts", open=False):
+                    current_prompts = gr.Textbox(
+                        label="Active Prompts",
+                        placeholder="The currently active prompts will be displayed here.",
+                        lines=5,
+                        interactive=False
                     )
-                    
-                    perfect_output = gr.Textbox(
-                        label="Perfect Output Example",
-                        placeholder="Provide an example of what a perfect summary would look like...",
-                        lines=10
+                    update_prompts_btn = gr.Button("Show Current Prompts")
+                        
+                with gr.Row():
+                    status_msg = gr.Textbox(label="Status", interactive=False)
+            
+            with gr.Tab("Optimization"):
+                with gr.Row():
+                    with gr.Column():
+                        gr.Markdown("## Prompt Optimization")
+                        gr.Markdown(
+                            "Click the button below to trigger the backward pass and optimize prompts based on collected feedback."
+                        )
+                        optimize_btn = gr.Button("Optimize Prompts", variant="primary")
+                        optimization_status = gr.Textbox(label="Optimization Status", interactive=False)
+                        
+                        # Display the current round
+                        current_round_display = gr.Textbox(
+                            label="Current Round",
+                            value=f"Round {self.current_round}",
+                            interactive=False
+                        )
+                
+                with gr.Accordion("Optimized Prompts", open=False):
+                    optimized_prompts = gr.Textbox(
+                        label="Prompts After Optimization",
+                        placeholder="The optimized prompts will be displayed here after optimization.",
+                        lines=8,
+                        interactive=False
                     )
-                    
-                    with gr.Row():
-                        save_btn = gr.Button("Save & Get New Data")
-                        optimize_btn = gr.Button("Run Optimization", variant="secondary")
             
-            with gr.Row():
-                status_output = gr.Textbox(label="Status", lines=2)
-            
-            # Event handlers
+            # Function to generate input data
             def on_generate_input():
-                notes, comp = self.generate_input_data()
-                return [notes, comp]
+                low_inf_notes, comp_id = self.generate_input_data()
+                return low_inf_notes, comp_id
             
+            # Function to generate summary
             def on_generate_summary(notes, comp):
                 result = self.generate_summary(notes, comp)
-                return [
-                    result["content"],
-                    result["score"],
-                    result["feedback"],
-                    result["perfect_output"]
-                ]
+                return result["content"], result["score"], result["feedback"], result["perfect_output"]
             
+            # Function to save evaluation
             def on_save(notes, comp, content, score, fb, perfect):
                 success = self.save_to_database(notes, comp, content, score, fb, perfect)
                 if success:
-                    new_notes, new_comp = self.generate_input_data()
-                    new_result = self.generate_summary(new_notes, new_comp)
-                    return [
-                        new_notes,
-                        new_comp,
-                        new_result["content"],
-                        new_result["score"],
-                        new_result["feedback"],
-                        new_result["perfect_output"],
-                        "Data saved successfully. Generated new data."
-                    ]
+                    return "Evaluation saved successfully!"
                 else:
-                    return [
-                        notes, comp, content, score, fb, perfect,
-                        "Failed to save data. Please try again."
-                    ]
+                    return "Error saving evaluation. Please try again."
             
+            # Function to optimize prompts
             def on_optimize():
-                status = self.trigger_optimization()
-                return status
+                success = self.trigger_backward_pass()
+                if success:
+                    # Update the current round display
+                    current_round = f"Round {self.current_round}"
+                    # Get the optimized prompts for display
+                    prompt_text = self._get_current_prompts_text()
+                    return "Optimization complete! Prompts have been updated for the next round.", current_round, prompt_text
+                else:
+                    return "Error during optimization. Please check logs.", f"Round {self.current_round}", ""
             
-            # Connect events
-            generate_input_btn.click(
-                on_generate_input,
-                inputs=[],
-                outputs=[low_inference_notes, component_id]
-            )
+            # Function to display current prompts
+            def on_show_prompts():
+                return self._get_current_prompts_text()
+                
+            # Connect UI components to functions
+            gen_input_btn.click(on_generate_input, outputs=[low_inference_notes, component_id])
+            gen_btn.click(on_generate_summary, inputs=[low_inference_notes, component_id], 
+                         outputs=[generated_content, score, feedback, perfect_output])
+            save_btn.click(on_save, inputs=[low_inference_notes, component_id, generated_content, 
+                                          score, feedback, perfect_output], 
+                          outputs=[status_msg])
+            optimize_btn.click(on_optimize, outputs=[optimization_status, current_round_display, optimized_prompts])
+            update_prompts_btn.click(on_show_prompts, outputs=[current_prompts])
             
-            generate_summary_btn.click(
-                on_generate_summary,
-                inputs=[low_inference_notes, component_id],
-                outputs=[summary_output, score, feedback, perfect_output]
-            )
+        self.app = app
+        return app
+    
+    def _get_current_prompts_text(self) -> str:
+        """
+        Get the text representation of the current active prompts.
+        
+        Returns:
+            str: The formatted text of the current prompts
+        """
+        if not self.archer:
+            logger.warning("No Archer instance available for retrieving prompts")
+            return "No Archer instance available."
             
-            save_btn.click(
-                on_save,
-                inputs=[
-                    low_inference_notes, component_id, 
-                    summary_output, score, feedback, perfect_output
-                ],
-                outputs=[
-                    low_inference_notes, component_id, 
-                    summary_output, score, feedback, perfect_output,
-                    status_output
-                ]
-            )
-            
-            optimize_btn.click(
-                on_optimize,
-                inputs=[],
-                outputs=[status_output]
-            )
-            
-            self.app = app
-            return app
+        try:
+            # Get the active prompts from the Archer instance
+            active_prompts = self.archer.active_prompts
+            if not active_prompts:
+                logger.warning("No active prompts found in Archer instance")
+                return "No active prompts found."
+                
+            # Format the prompts for display
+            prompt_text = "CURRENT ACTIVE PROMPTS:\n\n"
+            for i, prompt in enumerate(active_prompts):
+                prompt_text += f"Prompt {i+1}:\n{prompt.content}\n\n"
+                
+            logger.info(f"Retrieved {len(active_prompts)} active prompts for display")
+            return prompt_text
+        except Exception as e:
+            logger.error(f"Error getting current prompts: {str(e)}")
+            return f"Error retrieving prompts: {str(e)}"
     
     def launch(self, share: bool = False, server_port: Optional[int] = None):
         """

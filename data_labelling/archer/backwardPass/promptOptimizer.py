@@ -6,6 +6,7 @@ It can use simple LLM-based optimization or AdaLFlow gradient-based optimization
 from typing import List, Dict, Any, Optional, Union, Tuple
 import copy
 import random
+import logging
 
 from archer.helpers.llm_call import llm_call
 from archer.helpers.prompt import Prompt
@@ -393,114 +394,216 @@ class PromptOptimizer:
     
     def optimize(self, prompt_objs, feedback_map, score_map):
         """
-        Run optimization over prompt objects using feedback and scores with AdaLFlow.
+        Optimize a batch of prompts based on evaluation feedback.
+        
+        This method orchestrates the optimization process based on whether 
+        AdaLFlow is enabled. It handles the core backward pass functionality.
         
         Args:
-            prompt_objs (List[Prompt]): Current generation prompts.
-            feedback_map (dict): prompt_id (str) -> str feedback mapping.
-            score_map (dict): prompt_id (str) -> float score mapping.
+            prompt_objs: List of Prompt objects to optimize.
+            feedback_map: Dictionary mapping prompt IDs to feedback strings.
+            score_map: Dictionary mapping prompt IDs to scores.
             
         Returns:
-            List[Prompt]: New prompt variants (top ones).
+            List[Prompt]: The optimized prompt objects, or the original prompts if optimization fails.
         """
-        if not self.adalflow_enabled:
-            # Fall back to standard optimization if AdaLFlow is not enabled
-            new_prompts = []
-            for i, prompt in enumerate(prompt_objs):
-                pid = str(i)
-                feedback = feedback_map.get(pid, "")
-                score = score_map.get(pid, 0.0)
-                improved_content = self.optimize_prompt(prompt, feedback, score)
-                new_prompt = copy.deepcopy(prompt)
-                new_prompt.update(new_content=improved_content, score=score, feedback=feedback)
-                new_prompts.append(new_prompt)
-            
-            # Generate additional variants
-            variants = self.generate_prompt_variants(
-                new_prompts, 
-                variation_traits=self.variation_traits,
-                num_variants=2  # Create 2 additional variants per optimized prompt
-            )
-            new_prompts.extend(variants)
-            
-            return new_prompts
+        logger = logging.getLogger(__name__)
+        logger.info(f"Starting backward pass optimization for {len(prompt_objs)} prompts")
+        logger.debug(f"Feedback map: {feedback_map}")
+        logger.debug(f"Score map: {score_map}")
+        logger.info(f"AdaLFlow enabled: {self.adalflow_enabled}")
         
-        try:
-            # Step 1: Wrap Prompts as AdaLFlow Parameters
-            parameters = self._wrap_prompts_as_params(prompt_objs)
-            
-            # Step 2: Attach gradients (feedback and score)
-            for i, param in enumerate(parameters):
-                pid = str(i)
-                feedback = feedback_map.get(pid, "")
-                score = score_map.get(pid, 0.0)
-                magnitude = self._calculate_gradient_magnitude(score)
+        # If no prompts, return empty list
+        if not prompt_objs:
+            logger.warning("No prompts provided for optimization")
+            return []
+        
+        # If AdaLFlow is enabled, use it for optimization
+        if self.adalflow_enabled and ADALFLOW_AVAILABLE:
+            logger.info("Using AdaLFlow for optimization")
+            try:
+                # Step 1: Wrap Prompts as AdaLFlow Parameters
+                logger.info("Step 1: Wrapping prompts as AdaLFlow parameters")
+                parameters = self._wrap_prompts_as_params(prompt_objs)
+                logger.debug(f"Created {len(parameters)} AdaLFlow parameters")
                 
-                param.add_gradient({
-                    "score": score,
-                    "feedback": feedback,
-                    "magnitude": magnitude,
-                    "variation_traits": self.variation_traits
-                })
+                # Step 2: Attach gradients (feedback and score)
+                logger.info("Step 2: Attaching gradients to parameters")
+                for i, param in enumerate(parameters):
+                    pid = str(i)
+                    feedback = feedback_map.get(pid, "")
+                    score = score_map.get(pid, 0.0)
+                    magnitude = self._calculate_gradient_magnitude(score)
+                    
+                    logger.debug(f"Parameter {i}: score={score}, magnitude={magnitude}")
+                    
+                    param.add_gradient({
+                        "score": score,
+                        "feedback": feedback,
+                        "magnitude": magnitude,
+                        "variation_traits": self.variation_traits
+                    })
+                
+                # Step 3: Run Backward Pass
+                logger.info("Step 3: Running backward pass")
+                for param in parameters:
+                    try:
+                        logger.debug(f"Running backward() on parameter: {param.role_desc}")
+                        param.backward()  # Triggers LLM to analyze feedback
+                        logger.debug(f"Backward pass successful for parameter: {param.role_desc}")
+                    except Exception as e:
+                        logger.error(f"Error in backward() for parameter {param.role_desc}: {str(e)}")
+                        # Continue with other parameters even if one fails
+                
+                # Step 4: Run Optimizer (TGD) to generate new prompt variants
+                logger.info("Step 4: Running optimizer")
+                try:
+                    logger.debug("Setting parameters in optimizer")
+                    self.optimizer.set_parameters(parameters)
+                    logger.debug("Calling propose() on optimizer")
+                    self.optimizer.propose()  # Uses gradients to generate new data
+                    logger.debug("Calling step() on optimizer")
+                    self.optimizer.step()     # Finalize new values
+                    logger.info("Optimizer completed successfully")
+                except Exception as e:
+                    logger.error(f"Error in optimizer: {str(e)}")
+                    logger.warning("Falling back to standard optimization")
+                    return self._fallback_optimize(prompt_objs, feedback_map, score_map)
+                
+                # Step 5: Return updated prompt objects (new generation)
+                logger.info("Step 5: Creating new prompt objects")
+                new_prompts = []
+                for i, param in enumerate(parameters):
+                    original_prompt = prompt_objs[i]
+                    logger.debug(f"Creating new prompt from parameter {i}")
+                    logger.debug(f"Original content: {original_prompt.content[:50]}...")
+                    logger.debug(f"New content: {param.data[:50]}...")
+                    
+                    prompt = Prompt(
+                        content=param.data,
+                        score=score_map.get(str(i), 0.0),
+                        feedback_or_generation=feedback_map.get(str(i), ""),
+                        generation=original_prompt.generation + 1
+                    )
+                    new_prompts.append(prompt)
+                
+                # Step 6: Generate additional variants with natural variation
+                logger.info("Step 6: Generating additional variants")
+                try:
+                    variants = self.generate_prompt_variants(
+                        new_prompts,
+                        variation_traits=self.variation_traits,
+                        num_variants=2  # Create 2 additional variants per optimized prompt
+                    )
+                    logger.info(f"Generated {len(variants)} additional variants")
+                    new_prompts.extend(variants)
+                except Exception as e:
+                    logger.error(f"Error generating variants: {str(e)}")
+                
+                return new_prompts
+                
+            except Exception as e:
+                logger.error(f"Error in AdaLFlow optimization: {str(e)}")
+                logger.warning("Falling back to standard optimization")
+                # Fallback to standard optimization if AdaLFlow fails
+                return self._fallback_optimize(prompt_objs, feedback_map, score_map)
+        else:
+            # Use standard optimization approach
+            logger.info("Using standard optimization (non-AdaLFlow)")
+            return self._fallback_optimize(prompt_objs, feedback_map, score_map)
+
+    def _fallback_optimize(self, prompt_objs, feedback_map, score_map):
+        """
+        Fallback optimization method using standard LLM approach.
+        
+        Args:
+            prompt_objs: List of Prompt objects to optimize.
+            feedback_map: Dictionary mapping prompt IDs to feedback strings.
+            score_map: Dictionary mapping prompt IDs to scores.
             
-            # Step 3: Run Backward Pass
-            for param in parameters:
-                param.backward()  # Triggers LLM to analyze feedback
+        Returns:
+            List[Prompt]: The optimized prompt objects.
+        """
+        logger = logging.getLogger(__name__)
+        logger.info(f"Using fallback optimization for {len(prompt_objs)} prompts")
+        
+        new_prompts = []
+        for i, prompt in enumerate(prompt_objs):
+            pid = str(i)
+            feedback = feedback_map.get(pid, "")
+            score = score_map.get(pid, 0.0)
             
-            # Step 4: Run Optimizer (TGD) to generate new prompt variants
-            self.optimizer.set_parameters(parameters)
-            self.optimizer.propose()  # Uses gradients to generate new data
-            self.optimizer.step()     # Finalize new values
+            logger.debug(f"Optimizing prompt {i}: score={score}")
             
-            # Step 5: Return updated prompt objects (new generation)
-            new_prompts = []
-            for i, param in enumerate(parameters):
-                original_prompt = prompt_objs[i]
-                prompt = Prompt(
-                    content=param.data,
-                    score=score_map.get(str(i), 0.0),
-                    feedback_or_generation=feedback_map.get(str(i), ""),
-                    generation=original_prompt.generation + 1
-                )
-                new_prompts.append(prompt)
+            # Optimize the prompt
+            improved_content = self.optimize_prompt(prompt, feedback, score)
             
-            # Step 6: Generate additional variants with natural variation
+            logger.debug(f"Original content: {prompt.content[:50]}...")
+            logger.debug(f"Improved content: {improved_content[:50]}...")
+            
+            # Create a new prompt with the improved content
+            new_prompt = Prompt(
+                content=improved_content,
+                score=score,
+                feedback_or_generation=feedback,
+                generation=prompt.generation + 1
+            )
+            new_prompts.append(new_prompt)
+        
+        # Generate variants
+        logger.info("Generating variants for fallback optimization")
+        try:
             variants = self.generate_prompt_variants(
                 new_prompts,
                 variation_traits=self.variation_traits,
-                num_variants=2  # Create 2 additional variants per optimized prompt
+                num_variants=2
             )
+            logger.info(f"Generated {len(variants)} variants")
             new_prompts.extend(variants)
-            
-            return new_prompts
-            
         except Exception as e:
-            print(f"AdaLFlow optimization failed: {e}")
-            # Fallback to standard optimization
-            return self.optimize(prompt_objs, feedback_map, score_map)
-    
+            logger.error(f"Error generating variants in fallback: {str(e)}")
+        
+        return new_prompts
+
     def optimize_model(self, model, feedback_map, score_map):
         """
         Optimize prompts in a Model instance using AdaLFlow.
         
+        This updates the model's prompts directly based on feedback.
+        
         Args:
-            model: The Model object containing prompts to optimize.
-            feedback_map (dict): prompt_id -> str feedback mapping.
-            score_map (dict): prompt_id -> float score mapping.
+            model: The Model instance to optimize.
+            feedback_map: Dictionary mapping prompt IDs to feedback strings.
+            score_map: Dictionary mapping prompt IDs to scores.
             
         Returns:
-            bool: True if optimization was successful, False otherwise.
+            bool: True if successful, False otherwise.
         """
-        if not (model.adalflow_enabled and self.adalflow_enabled):
-            # Can't optimize using AdaLFlow if either the model or optimizer doesn't support it
+        logger = logging.getLogger(__name__)
+        logger.info(f"Starting model optimization for {model.name}")
+        logger.debug(f"Feedback map: {feedback_map}")
+        logger.debug(f"Score map: {score_map}")
+        logger.info(f"AdaLFlow enabled: {self.adalflow_enabled}")
+        
+        if not model.adalflow_enabled:
+            logger.warning(f"Model {model.name} does not have AdaLFlow enabled")
             return False
+            
+        if not hasattr(model, 'adalflow_params') or not model.adalflow_params:
+            logger.warning(f"Model {model.name} has no AdaLFlow parameters")
+            return False
+            
+        logger.info(f"Model has {len(model.adalflow_params)} AdaLFlow parameters")
         
         try:
             # Step 1: Attach gradients to model parameters with magnitude information
+            logger.info("Step 1: Attaching gradients to model parameters")
             for prompt_id, param in model.adalflow_params.items():
                 feedback = feedback_map.get(prompt_id, "")
                 score = score_map.get(prompt_id, 0.0)
                 magnitude = self._calculate_gradient_magnitude(score)
+                
+                logger.debug(f"Parameter {prompt_id}: score={score}, magnitude={magnitude}")
                 
                 param.add_gradient({
                     "score": score,
@@ -510,28 +613,60 @@ class PromptOptimizer:
                 })
             
             # Step 2: Run backward pass
-            for param in model.adalflow_params.values():
-                param.backward()
+            logger.info("Step 2: Running backward pass on model parameters")
+            for prompt_id, param in model.adalflow_params.items():
+                try:
+                    logger.debug(f"Running backward() on parameter {prompt_id}")
+                    param.backward()
+                    logger.debug(f"Backward pass successful for parameter {prompt_id}")
+                except Exception as e:
+                    logger.error(f"Error in backward() for parameter {prompt_id}: {str(e)}")
+                    # Continue with other parameters even if one fails
             
             # Step 3: Run optimizer
-            self.optimizer.set_parameters(list(model.adalflow_params.values()))
-            self.optimizer.propose()
-            self.optimizer.step()
+            logger.info("Step 3: Running optimizer on model parameters")
+            try:
+                logger.debug("Setting parameters in optimizer")
+                self.optimizer.set_parameters(list(model.adalflow_params.values()))
+                logger.debug("Calling propose() on optimizer")
+                self.optimizer.propose()
+                logger.debug("Calling step() on optimizer")
+                self.optimizer.step()
+                logger.info("Optimizer completed successfully")
+            except Exception as e:
+                logger.error(f"Error in optimizer for model: {str(e)}")
+                return False
             
             # Step 4: Update the model prompts
+            logger.info("Step 4: Updating model prompts")
+            updates_count = 0
             for prompt_id, param in model.adalflow_params.items():
                 if prompt_id in model.prompts:
-                    model.update_prompt(
-                        prompt_id=prompt_id,
-                        new_content=param.data,
-                        score=score_map.get(prompt_id, 0.0),
-                        feedback=feedback_map.get(prompt_id, "")
-                    )
+                    try:
+                        old_content = model.prompts[prompt_id].content
+                        new_content = param.data
+                        score = score_map.get(prompt_id, 0.0)
+                        feedback = feedback_map.get(prompt_id, "")
+                        
+                        logger.debug(f"Updating prompt {prompt_id}")
+                        logger.debug(f"Old content: {old_content[:50]}...")
+                        logger.debug(f"New content: {new_content[:50]}...")
+                        
+                        model.update_prompt(
+                            prompt_id=prompt_id,
+                            new_content=new_content,
+                            score=score,
+                            feedback=feedback
+                        )
+                        updates_count += 1
+                    except Exception as e:
+                        logger.error(f"Error updating prompt {prompt_id}: {str(e)}")
             
+            logger.info(f"Updated {updates_count} prompts in the model")
             return True
             
         except Exception as e:
-            print(f"Error optimizing model: {e}")
+            logger.error(f"Error optimizing model: {str(e)}")
             return False
     
     def optimize_model_with_evaluation(self, model, feedback_map, score_map, input_data, prompt_evaluator):
