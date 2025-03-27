@@ -968,35 +968,45 @@ class ArgillaDatabase:
                     questions=[
                         rg.RatingQuestion(
                             name="ai_score",
+                            values=[1, 2, 3, 4, 5],
                             title="AI Quality Score",
                             description="AI-generated quality score",
-                            values=[1, 2, 3, 4, 5]
+                            required=True
                         ),
                         rg.TextQuestion(
                             name="ai_feedback",
                             title="AI Feedback",
-                            description="AI-generated feedback"
+                            description="AI-generated feedback",
+                            required=True,
+                            use_markdown=True
                         ),
                         rg.TextQuestion(
                             name="ai_improved_output",
                             title="AI Improved Output",
-                            description="AI-suggested improved version"
+                            description="AI-suggested improved version",
+                            required=True,
+                            use_markdown=True
                         ),
                         rg.RatingQuestion(
                             name="human_score",
+                            values=[1, 2, 3, 4, 5],
                             title="Human Quality Score",
                             description="Human-generated quality score",
-                            values=[1, 2, 3, 4, 5]
+                            required=False
                         ),
                         rg.TextQuestion(
                             name="human_feedback",
                             title="Human Feedback",
-                            description="Human-generated feedback"
+                            description="Human-generated feedback",
+                            required=False,
+                            use_markdown=True
                         ),
                         rg.TextQuestion(
                             name="human_improved_output",
                             title="Human Improved Output",
-                            description="Human-suggested improved version"
+                            description="Human-suggested improved version",
+                            required=False,
+                            use_markdown=True
                         )
                     ],
                     metadata=[
@@ -1046,6 +1056,23 @@ class ArgillaDatabase:
                 prompts_settings = rg.Settings(
                     fields=[
                         rg.TextField(name="content", title="Prompt Content")
+                    ],
+                    questions=[
+                        # Add at least one question to satisfy Argilla requirements
+                        rg.RatingQuestion(
+                            name="average_score", 
+                            values=[1, 2, 3, 4, 5],
+                            title="Average Score",
+                            description="Average performance score of this prompt",
+                            required=False
+                        ),
+                        rg.LabelQuestion(
+                            name="survived",
+                            labels={"TRUE": "Yes", "FALSE": "No"},
+                            title="Survived",
+                            description="Whether this prompt survived to the next round",
+                            required=False
+                        )
                     ],
                     metadata=[
                         rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
@@ -1097,6 +1124,23 @@ class ArgillaDatabase:
                     fields=[
                         rg.TextField(name="content", title="Prompt Content")
                     ],
+                    questions=[
+                        # Add questions to satisfy Argilla requirements
+                        rg.LabelQuestion(
+                            name="is_active",
+                            labels={"TRUE": "Yes", "FALSE": "No"},
+                            title="Is Active",
+                            description="Whether this evaluator prompt is currently active",
+                            required=False
+                        ),
+                        rg.TextQuestion(
+                            name="notes",
+                            title="Notes",
+                            description="Additional notes about this evaluator prompt",
+                            required=False,
+                            use_markdown=True
+                        )
+                    ],
                     metadata=[
                         rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
                         rg.TermsMetadataProperty(name="is_active", title="Is Active"),
@@ -1145,6 +1189,23 @@ class ArgillaDatabase:
                         rg.TextField(name="number", title="Round Number"),
                         rg.TextField(name="status", title="Status")
                     ],
+                    questions=[
+                        # Add questions to satisfy Argilla requirements
+                        rg.TextQuestion(
+                            name="metrics_summary",
+                            title="Metrics Summary",
+                            description="Summary of round performance metrics",
+                            required=False,
+                            use_markdown=True
+                        ),
+                        rg.RatingQuestion(
+                            name="overall_performance",
+                            values=[1, 2, 3, 4, 5],
+                            title="Overall Performance",
+                            description="Overall performance rating of this round",
+                            required=False
+                        )
+                    ],
                     metadata=[
                         rg.TermsMetadataProperty(name="round_id", title="Round ID"),
                         rg.TermsMetadataProperty(name="start_time", title="Start Time"),
@@ -1191,6 +1252,23 @@ class ArgillaDatabase:
                 lineage_settings = rg.Settings(
                     fields=[
                         rg.TextField(name="change_reason", title="Change Reason")
+                    ],
+                    questions=[
+                        # Add questions to satisfy Argilla requirements
+                        rg.TextQuestion(
+                            name="effectiveness",
+                            title="Change Effectiveness",
+                            description="Assessment of how effective the prompt change was",
+                            required=False,
+                            use_markdown=True
+                        ),
+                        rg.RatingQuestion(
+                            name="improvement_rating",
+                            values=[1, 2, 3, 4, 5],
+                            title="Improvement Rating",
+                            description="Rating of the improvement from parent to child prompt",
+                            required=False
+                        )
                     ],
                     metadata=[
                         rg.TermsMetadataProperty(name="lineage_id", title="Lineage ID"),
