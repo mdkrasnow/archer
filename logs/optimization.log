@@ -1,0 +1,104 @@
+2025-03-27 14:14:44,329 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization logging configured
+2025-03-27 14:14:44,329 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization logging configured
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - PromptOptimizer initialized with model gemini-2.0-flash
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - PromptOptimizer initialized with model gemini-2.0-flash
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - AdaLFlow enabled: False, ADALFLOW_AVAILABLE: True
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - AdaLFlow enabled: False, ADALFLOW_AVAILABLE: True
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM timeout: 10s, Max retries: 2
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM timeout: 10s, Max retries: 2
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variation traits: clarity, specificity, actionability
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variation traits: clarity, specificity, actionability
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Starting backward pass optimization for 3 prompts
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Starting backward pass optimization for 3 prompts
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - AdaLFlow enabled: False
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - AdaLFlow enabled: False
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Using standard optimization (non-AdaLFlow)
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Using standard optimization (non-AdaLFlow)
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Using fallback optimization for 3 prompts
+2025-03-27 14:14:44,330 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Using fallback optimization for 3 prompts
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt 1/3: score=3.5
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt 1/3: score=3.5
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt: score=3.5
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt: score=3.5
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 1/2
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 1/2
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:44,331 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:45,334 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 2/2
+2025-03-27 14:14:45,334 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 2/2
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors, using original prompt
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors, using original prompt
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization completed in 1.00s
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization completed in 1.00s
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt 2/3: score=2.8
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt 2/3: score=2.8
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt: score=2.8
+2025-03-27 14:14:45,335 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt: score=2.8
+2025-03-27 14:14:45,336 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 1/2
+2025-03-27 14:14:45,336 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 1/2
+2025-03-27 14:14:45,336 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:45,336 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:46,341 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 2/2
+2025-03-27 14:14:46,341 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 2/2
+2025-03-27 14:14:46,341 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:46,341 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:46,342 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors, using original prompt
+2025-03-27 14:14:46,342 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors, using original prompt
+2025-03-27 14:14:46,342 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization completed in 1.01s
+2025-03-27 14:14:46,342 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization completed in 1.01s
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt 3/3: score=4.2
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt 3/3: score=4.2
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt: score=4.2
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimizing prompt: score=4.2
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 1/2
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 1/2
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:46,343 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:47,348 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 2/2
+2025-03-27 14:14:47,348 - data_labelling.archer.backwardPass.promptOptimizer - INFO - LLM call attempt 2/2
+2025-03-27 14:14:47,349 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:47,349 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error in optimize_prompt: signal only works in main thread of the main interpreter
+2025-03-27 14:14:47,349 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors, using original prompt
+2025-03-27 14:14:47,349 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors, using original prompt
+2025-03-27 14:14:47,349 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization completed in 1.01s
+2025-03-27 14:14:47,349 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Optimization completed in 1.01s
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating variants for fallback optimization
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating variants for fallback optimization
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating variants for 3 prompts, 2 variants each
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating variants for 3 prompts, 2 variants each
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variation traits: clarity, specificity, actionability
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variation traits: clarity, specificity, actionability
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating variants for base prompt 1/3
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating variants for base prompt 1/3
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Using standard LLM approach for variant generation
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Using standard LLM approach for variant generation
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating prompt variant with temp boost: 0.0
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating prompt variant with temp boost: 0.0
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation attempt 1/2
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation attempt 1/2
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error generating variant: signal only works in main thread of the main interpreter
+2025-03-27 14:14:47,350 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error generating variant: signal only works in main thread of the main interpreter
+2025-03-27 14:14:48,356 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation attempt 2/2
+2025-03-27 14:14:48,356 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation attempt 2/2
+2025-03-27 14:14:48,356 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error generating variant: signal only works in main thread of the main interpreter
+2025-03-27 14:14:48,356 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error generating variant: signal only works in main thread of the main interpreter
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - WARNING - Max attempts reached with errors
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating prompt variant with temp boost: 0.1
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generating prompt variant with temp boost: 0.1
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation attempt 1/2
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation attempt 1/2
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error generating variant: signal only works in main thread of the main interpreter
+2025-03-27 14:14:48,357 - data_labelling.archer.backwardPass.promptOptimizer - ERROR - Error generating variant: signal only works in main thread of the main interpreter
+2025-03-27 14:14:49,336 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Stop requested for optimization process
+2025-03-27 14:14:49,336 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Stop requested for optimization process
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation stopped by user request during retry
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation stopped by user request during retry
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generated 0 variants with standard approach
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generated 0 variants with standard approach
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation stopped by user request after 1/3 prompts
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Variant generation stopped by user request after 1/3 prompts
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generated 0 variants in 2.01s
+2025-03-27 14:14:49,358 - data_labelling.archer.backwardPass.promptOptimizer - INFO - Generated 0 variants in 2.01s

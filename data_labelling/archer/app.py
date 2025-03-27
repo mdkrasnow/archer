@@ -5,22 +5,33 @@ import numpy as np
 from typing import Dict, List, Any, Tuple, Optional, Union
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import logging
 from pathlib import Path
+import json
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Import Archer components
-# Make sure the parent directory is in the path for imports
-sys.path.append(str(Path(__file__).parent.parent))
+# Add parent directory to path
+parent_dir = str(Path(__file__).parent.parent)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
 
 # Import after path is set
-from database.argilla import ArgillaDatabase
+from archer.database.argilla import ArgillaDatabase
+from archer.helpers.prompt import Prompt
+
+# Track optimization status
+_last_backward_pass_attempt = datetime.now()
+_backward_pass_min_interval = timedelta(minutes=5)  # Minimum time between backward pass attempts
+_failed_attempts = 0
+_max_consecutive_failures = 3
+_failure_backoff_multiplier = 2
 
 class GradioApp:
     """
@@ -117,32 +128,115 @@ class GradioApp:
             logger.error(f"Error saving data: {str(e)}")
             return False
     
-    def trigger_backward_pass(self) -> bool:
+    def trigger_backward_pass(self) -> dict:
         """
-        Trigger the backward pass in the Archer system.
+        Trigger the backward pass optimization process.
+        
+        This function checks if there is an Archer instance available, retrieves validated
+        evaluations from the database, and triggers the backward pass optimization if 
+        evaluations are found.
         
         Returns:
-            bool: True if backward pass is successful, False otherwise
+            dict: A status message indicating whether the backward pass was triggered.
         """
+        global _last_backward_pass_attempt, _failed_attempts
+        
+        logger = logging.getLogger(__name__)
+        logger.info("Triggering backward pass")
+        
+        # Check if enough time has passed since the last attempt
+        time_since_last_attempt = datetime.now() - _last_backward_pass_attempt
+        required_interval = _backward_pass_min_interval * (_failure_backoff_multiplier ** min(_failed_attempts, 5))
+        
+        if time_since_last_attempt < required_interval:
+            remaining_seconds = (required_interval - time_since_last_attempt).total_seconds()
+            logger.warning(
+                f"Attempt to trigger backward pass too soon after previous attempt. "
+                f"Please wait {remaining_seconds:.0f} seconds before retrying."
+            )
+            return {
+                "status": "error", 
+                "message": f"Backward pass was attempted too recently. Please wait {remaining_seconds:.0f} seconds before retrying."
+            }
+        
+        # Update the last attempt time
+        _last_backward_pass_attempt = datetime.now()
+        
+        # Check if there is an Archer instance
+        if self.archer is None:
+            logger.error("No Archer instance available for backward pass")
+            return {"status": "error", "message": "No Archer instance available"}
+        
+        # Get validated evaluations from the database
         try:
-            logger.info("Triggering backward pass")
+            logger.info("Fetching validated evaluations from database")
+            evaluations = self.db.get_validated_evaluations()
+            logger.info(f"Found {len(evaluations) if evaluations else 0} validated evaluations")
             
-            if self.archer is None:
-                logger.warning("No Archer instance available. Skipping backward pass.")
-                # Increment round number anyway for simulation
-                self.current_round += 1
-                return True
+            if not evaluations:
+                logger.warning("No evaluations found, skipping backward pass")
+                return {"status": "warning", "message": "No evaluations found for optimization"}
             
-            # Trigger the backward pass in the Archer system
-            # This would typically call a method on the Archer instance
-            # For now, we'll just increment the round number
-            self.current_round += 1
+            # Transform evaluations to the format expected by Archer
+            transformed_evaluations = []
+            for eval_data in evaluations:
+                try:
+                    prompt_content = eval_data.get('prompt', '')
+                    prompt = Prompt(
+                        content=prompt_content,
+                        score=eval_data.get('score', 3.0),
+                        feedback_or_generation=eval_data.get('feedback', '')
+                    )
+                    transformed_evaluations.append(
+                        (prompt, eval_data.get('generated_text', ''), eval_data)
+                    )
+                except Exception as e:
+                    logger.error(f"Error transforming evaluation: {str(e)}")
+                    # Continue with other evaluations
             
-            logger.info(f"Backward pass completed. New round: {self.current_round}")
-            return True
+            if not transformed_evaluations:
+                logger.error("Failed to transform any evaluations, skipping backward pass")
+                _failed_attempts += 1
+                return {"status": "error", "message": "Failed to transform evaluations"}
+            
+            # Run the backward pass
+            logger.info(f"Running backward pass with {len(transformed_evaluations)} evaluations")
+            start_time = time.time()
+            
+            # Track success/failure
+            try:
+                success = self.archer.run_backward_pass(transformed_evaluations)
+                execution_time = time.time() - start_time
+                
+                if success:
+                    logger.info(f"Backward pass completed successfully in {execution_time:.2f} seconds")
+                    # Reset failure count on success
+                    _failed_attempts = 0
+                    return {"status": "success", "message": "Backward pass completed successfully"}
+                else:
+                    logger.warning(f"Backward pass failed after {execution_time:.2f} seconds")
+                    _failed_attempts += 1
+                    # Increase backoff time for consecutive failures
+                    if _failed_attempts >= _max_consecutive_failures:
+                        logger.error(
+                            f"Backward pass has failed {_failed_attempts} consecutive times. "
+                            f"Increasing backoff interval significantly."
+                        )
+                    return {
+                        "status": "error",
+                        "message": f"Backward pass failed (attempt {_failed_attempts})"
+                    }
+                    
+            except Exception as e:
+                execution_time = time.time() - start_time
+                logger.error(f"Error during backward pass: {str(e)}")
+                _failed_attempts += 1
+                return {"status": "error", "message": f"Error during backward pass: {str(e)}"}
+            
         except Exception as e:
-            logger.error(f"Error triggering backward pass: {str(e)}")
-            return False
+            logger.error(f"Error fetching evaluations: {str(e)}")
+            _failed_attempts += 1
+            return {"status": "error", "message": f"Error fetching evaluations: {str(e)}"}
     
     def create_prompt_performance_chart(self) -> plt.Figure:
         """
@@ -471,10 +565,10 @@ class GradioApp:
                         return ui_df, full_df, "Error saving data", round_display.value
                     
                     # Trigger the backward pass
-                    backward_success = self.trigger_backward_pass()
+                    backward_status = self.trigger_backward_pass()
                     
-                    if not backward_success:
-                        return ui_df, full_df, "Error triggering backward pass", round_display.value
+                    if backward_status["status"] == "error":
+                        return ui_df, full_df, backward_status["message"], round_display.value
                     
                     # Load new data
                     new_df = self.load_data()

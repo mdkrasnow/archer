@@ -7,6 +7,9 @@ from typing import List, Dict, Any, Optional, Union, Tuple
 import copy
 import random
 import logging
+import time
+import concurrent.futures
+from functools import partial
 
 from archer.helpers.llm_call import llm_call
 from archer.helpers.prompt import Prompt
@@ -241,18 +244,20 @@ class PromptOptimizer:
             print(f"Error in optimize_prompt: {e}")
             return prompt.content
     
-    def generate_prompt_variants(self, base_prompts, variation_traits=None, num_variants=3):
+    def generate_prompt_variants(self, base_prompts, variation_traits=None, num_variants=3, max_retries=2):
         """
-        Generate multiple variants of base prompts with natural variation.
+        Generate multiple variants of base prompts with natural variation and retry logic.
         
         Args:
             base_prompts: List of Prompt objects to use as base.
             variation_traits: List of traits to emphasize in variations.
             num_variants: Number of variants to generate per base prompt.
+            max_retries: Maximum number of retries per variant.
             
         Returns:
             List of new Prompt objects (variants).
         """
+        logger = logging.getLogger(__name__)
         variants = []
         traits = variation_traits or self.variation_traits
         
@@ -264,81 +269,121 @@ class PromptOptimizer:
                 ", ".join(traits) + ". "
             )
         
-        for base_prompt in base_prompts:
-            # Generate variants using AdaLFlow if available
-            if self.adalflow_enabled and ADALFLOW_AVAILABLE:
-                try:
-                    # Wrap the prompt as an AdaLFlow parameter
-                    param = Parameter(
-                        data=base_prompt.content,
-                        role_desc=f"Base prompt",
-                        requires_opt=True,
-                        param_type=ParameterType.PROMPT,
-                        score=base_prompt.score or 0.0
-                    )
-                    
-                    # Add gradient based on feedback and score
-                    param.add_gradient({
-                        "score": base_prompt.score or 0.0,
-                        "feedback": base_prompt.feedback or "",
-                        "variation_traits": traits
-                    })
-                    
-                    # Run backward pass to analyze feedback
-                    param.backward()
-                    
-                    # Generate variants
-                    self.optimizer.set_parameters([param])
-                    self.optimizer.propose()
-                    self.optimizer.step()
-                    
-                    # Create new Prompt objects for the variants based on AdaLFlow optimization
-                    # In a real implementation, we would extract the variants from the optimizer
-                    # but for mock implementations, we'll still use the LLM generation approach
-                    for i in range(num_variants):
-                        variant = self._generate_variant_with_llm(
-                            base_prompt, 
-                            variation_instructions, 
-                            temperature_boost=i * 0.1
-                        )
-                        if variant:
-                            variants.append(variant)
-                except Exception as e:
-                    print(f"AdaLFlow variant generation failed: {e}")
-                    # Fallback to standard approach if AdaLFlow fails
-                    for i in range(num_variants):
-                        variant = self._generate_variant_with_llm(
-                            base_prompt, 
-                            variation_instructions, 
-                            temperature_boost=i * 0.1
-                        )
-                        if variant:
-                            variants.append(variant)
-            else:
-                # Fallback to standard LLM approach
-                for i in range(num_variants):
-                    variant = self._generate_variant_with_llm(
-                        base_prompt, 
-                        variation_instructions, 
-                        temperature_boost=i * 0.1
-                    )
-                    if variant:
-                        variants.append(variant)
+        # Track generated variants to ensure we don't exceed limits
+        variant_count = 0
+        max_variants = len(base_prompts) * num_variants * 2  # Absolute maximum to prevent runaway generation
         
+        logger.info(f"Generating up to {num_variants} variants for {len(base_prompts)} base prompts")
+        
+        for base_prompt in base_prompts:
+            # Limit variants per base prompt
+            prompt_variants = 0
+            
+            if variant_count >= max_variants:
+                logger.warning(f"Reached maximum variant limit ({max_variants}), stopping generation")
+                break
+                
+            for i in range(num_variants):
+                if variant_count >= max_variants:
+                    break
+                    
+                # Attempt to generate with retries
+                for retry in range(max_retries + 1):
+                    # Exit early if we've hit the maximum
+                    if variant_count >= max_variants:
+                        break
+                        
+                    try:
+                        # Add small incremental temperature boost for variety and retries
+                        temp_boost = i * 0.1 + retry * 0.05
+                        
+                        if self.adalflow_enabled and ADALFLOW_AVAILABLE and retry == 0:
+                            try:
+                                # Attempt AdaLFlow generation on first try only
+                                logger.debug(f"Attempting AdaLFlow generation for prompt variant {i+1}")
+                                param = Parameter(
+                                    data=base_prompt.content,
+                                    role_desc=f"Base prompt",
+                                    requires_opt=True,
+                                    param_type=ParameterType.PROMPT,
+                                    score=base_prompt.score or 0.0
+                                )
+                                
+                                # Add gradient based on feedback and score
+                                param.add_gradient({
+                                    "score": base_prompt.score or 0.0,
+                                    "feedback": base_prompt.feedback or "",
+                                    "variation_traits": traits
+                                })
+                                
+                                # Run backward pass to analyze feedback
+                                param.backward()
+                                
+                                # Generate variants
+                                self.optimizer.set_parameters([param])
+                                self.optimizer.propose()
+                                self.optimizer.step()
+                                
+                                # Use standard LLM approach to extract the actual variant
+                                variant = self._generate_variant_with_llm(
+                                    base_prompt, 
+                                    variation_instructions, 
+                                    temperature_boost=temp_boost
+                                )
+                                
+                                if variant:
+                                    variants.append(variant)
+                                    prompt_variants += 1
+                                    variant_count += 1
+                                    break  # Success, no need for more retries
+                                    
+                            except Exception as e:
+                                logger.error(f"AdaLFlow variant generation failed: {str(e)}")
+                                # Fall through to standard approach on failure
+                        
+                        # Standard LLM approach (fallback or primary if AdaLFlow disabled)
+                        variant = self._generate_variant_with_llm(
+                            base_prompt, 
+                            variation_instructions, 
+                            temperature_boost=temp_boost
+                        )
+                        
+                        if variant:
+                            variants.append(variant)
+                            prompt_variants += 1
+                            variant_count += 1
+                            break  # Success, no need for more retries
+                        elif retry < max_retries:
+                            logger.warning(f"Variant generation attempt {retry+1}/{max_retries+1} failed, retrying...")
+                        else:
+                            logger.error(f"Failed to generate variant after {max_retries+1} attempts")
+                            
+                    except Exception as e:
+                        logger.error(f"Error in variant generation (retry {retry+1}/{max_retries+1}): {str(e)}")
+                        if retry == max_retries:
+                            logger.error("Exceeded maximum retries, skipping this variant")
+                    
+                    # Small delay between retries to avoid overwhelming the API
+                    if retry < max_retries:
+                        time.sleep(0.5)
+        
+        logger.info(f"Successfully generated {len(variants)} variants")
         return variants
     
-    def _generate_variant_with_llm(self, base_prompt, variation_instructions="", temperature_boost=0.0):
+    def _generate_variant_with_llm(self, base_prompt, variation_instructions="", temperature_boost=0.0, timeout=30):
         """
-        Generate a variant of a prompt using an LLM.
+        Generate a variant of a prompt using an LLM with timeout protection.
         
         Args:
             base_prompt: The Prompt object to create a variation of.
             variation_instructions: Additional instructions for variation.
             temperature_boost: Amount to increase temperature by for more variation.
+            timeout: Maximum time in seconds to wait for LLM response.
             
         Returns:
             A new Prompt object or None if generation failed.
         """
+        logger = logging.getLogger(__name__)
         try:
             variation_prompt = (
                 f"Create a variation of this prompt that preserves its intent "
@@ -348,26 +393,44 @@ class PromptOptimizer:
             )
             
             messages = [{"role": "user", "content": variation_prompt}]
-            response = self.llm_call(
-                messages=messages,
-                model=self.model_name,
-                temperature=min(0.9, self.temperature + temperature_boost),
-                openrouter_api_key=self.openrouter_api_key
-            )
             
-            variant_content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            
-            if variant_content:
-                variant = Prompt(
-                    content=variant_content,
-                    score=0.0,
-                    feedback_or_generation="Generated variant",
-                    generation=base_prompt.generation + 1
+            # Use concurrent.futures to enforce a timeout
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # Create a future for the LLM call
+                future = executor.submit(
+                    self.llm_call,
+                    messages=messages,
+                    model=self.model_name,
+                    temperature=min(0.9, self.temperature + temperature_boost),
+                    openrouter_api_key=self.openrouter_api_key
                 )
-                return variant
-            return None
+                
+                try:
+                    # Wait for the future to complete with a timeout
+                    response = future.result(timeout=timeout)
+                    
+                    # Extract the variant content
+                    variant_content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    
+                    if variant_content:
+                        logger.debug(f"Successfully generated variant (length: {len(variant_content)})")
+                        variant = Prompt(
+                            content=variant_content,
+                            score=0.0,
+                            feedback_or_generation="Generated variant",
+                            generation=base_prompt.generation + 1
+                        )
+                        return variant
+                    logger.warning("Empty variant content returned from LLM")
+                    return None
+                    
+                except concurrent.futures.TimeoutError:
+                    logger.error(f"Timeout ({timeout}s) exceeded while generating variant")
+                    future.cancel()  # Attempt to cancel the future
+                    return None
+                    
         except Exception as e:
-            print(f"Error generating variant: {e}")
+            logger.error(f"Error generating variant: {str(e)}")
             return None
     
     def _wrap_prompts_as_params(self, prompt_list):
@@ -512,14 +575,15 @@ class PromptOptimizer:
             logger.info("Using standard optimization (non-AdaLFlow)")
             return self._fallback_optimize(prompt_objs, feedback_map, score_map)
 
-    def _fallback_optimize(self, prompt_objs, feedback_map, score_map):
+    def _fallback_optimize(self, prompt_objs, feedback_map, score_map, variant_limit=4):
         """
-        Fallback optimization method using standard LLM approach.
+        Fallback optimization method using standard LLM approach with safety limits.
         
         Args:
             prompt_objs: List of Prompt objects to optimize.
             feedback_map: Dictionary mapping prompt IDs to feedback strings.
             score_map: Dictionary mapping prompt IDs to scores.
+            variant_limit: Maximum number of variants to generate.
             
         Returns:
             List[Prompt]: The optimized prompt objects.
@@ -527,41 +591,105 @@ class PromptOptimizer:
         logger = logging.getLogger(__name__)
         logger.info(f"Using fallback optimization for {len(prompt_objs)} prompts")
         
-        new_prompts = []
-        for i, prompt in enumerate(prompt_objs):
-            pid = str(i)
-            feedback = feedback_map.get(pid, "")
-            score = score_map.get(pid, 0.0)
-            
-            logger.debug(f"Optimizing prompt {i}: score={score}")
-            
-            # Optimize the prompt
-            improved_content = self.optimize_prompt(prompt, feedback, score)
-            
-            logger.debug(f"Original content: {prompt.content[:50]}...")
-            logger.debug(f"Improved content: {improved_content[:50]}...")
-            
-            # Create a new prompt with the improved content
-            new_prompt = Prompt(
-                content=improved_content,
-                score=score,
-                feedback_or_generation=feedback,
-                generation=prompt.generation + 1
-            )
-            new_prompts.append(new_prompt)
+        # Safety check - don't optimize too many prompts at once
+        if len(prompt_objs) > 10:
+            logger.warning(f"Large number of prompts ({len(prompt_objs)}) to optimize, limiting to first 10")
+            prompt_objs = prompt_objs[:10]
         
-        # Generate variants
-        logger.info("Generating variants for fallback optimization")
+        new_prompts = []
+        successful_optimizations = 0
+        optimization_errors = 0
+        
+        for i, prompt in enumerate(prompt_objs):
+            try:
+                pid = str(i)
+                feedback = feedback_map.get(pid, "")
+                score = score_map.get(pid, 0.0)
+                
+                logger.debug(f"Optimizing prompt {i}: score={score}")
+                
+                # Optimize the prompt with timeout protection
+                start_time = time.time()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        self.optimize_prompt,
+                        prompt, feedback, score
+                    )
+                    
+                    try:
+                        # Wait for the future to complete with a timeout
+                        improved_content = future.result(timeout=60)
+                        execution_time = time.time() - start_time
+                        logger.debug(f"Optimization completed in {execution_time:.2f} seconds")
+                        
+                    except concurrent.futures.TimeoutError:
+                        logger.error("Timeout exceeded while optimizing prompt, using original content")
+                        future.cancel()
+                        improved_content = prompt.content
+                        optimization_errors += 1
+                
+                logger.debug(f"Original content: {prompt.content[:50]}...")
+                logger.debug(f"Improved content: {improved_content[:50]}...")
+                
+                # Create a new prompt with the improved content
+                new_prompt = Prompt(
+                    content=improved_content,
+                    score=score,
+                    feedback_or_generation=feedback,
+                    generation=prompt.generation + 1
+                )
+                new_prompts.append(new_prompt)
+                successful_optimizations += 1
+                
+            except Exception as e:
+                logger.error(f"Error optimizing prompt {i}: {str(e)}")
+                optimization_errors += 1
+                
+                # Use the original prompt as a fallback
+                if prompt not in new_prompts:
+                    new_prompts.append(prompt)
+        
+        # Determine safe variant count based on success rate
+        if successful_optimizations == 0:
+            logger.error("All prompt optimizations failed, skipping variant generation")
+            return new_prompts
+        
+        # Calculate safe variant count - reduce if we had errors
+        if optimization_errors > 0:
+            safe_variant_count = max(1, min(2, variant_limit - optimization_errors))
+            logger.warning(f"Reducing variant count to {safe_variant_count} due to {optimization_errors} optimization errors")
+        else:
+            safe_variant_count = min(variant_limit, 2)
+        
+        # Generate variants with a timeout
+        logger.info(f"Generating variants (max {safe_variant_count}) for fallback optimization")
         try:
-            variants = self.generate_prompt_variants(
-                new_prompts,
-                variation_traits=self.variation_traits,
-                num_variants=2
-            )
-            logger.info(f"Generated {len(variants)} variants")
-            new_prompts.extend(variants)
+            start_time = time.time()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    self.generate_prompt_variants,
+                    new_prompts,
+                    variation_traits=self.variation_traits,
+                    num_variants=safe_variant_count
+                )
+                
+                try:
+                    # Wait for the future to complete with a timeout
+                    variants = future.result(timeout=120)  # 2 minute timeout for the entire variant generation
+                    generation_time = time.time() - start_time
+                    logger.info(f"Generated {len(variants)} variants in {generation_time:.2f} seconds")
+                    new_prompts.extend(variants)
+                except concurrent.futures.TimeoutError:
+                    logger.error("Timeout exceeded while generating variants, proceeding with optimized prompts only")
+                    future.cancel()
+            
         except Exception as e:
             logger.error(f"Error generating variants in fallback: {str(e)}")
+        
+        # Final safety check - make sure we return something
+        if not new_prompts and prompt_objs:
+            logger.warning("Fallback optimization produced no results, returning original prompts")
+            return prompt_objs
         
         return new_prompts
 

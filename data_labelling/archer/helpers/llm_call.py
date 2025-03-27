@@ -3,8 +3,13 @@ This module provides the llm_call function for making API calls to language mode
 """
 import os
 import json
-from typing import Dict, List, Optional, Any
+import time
+import logging
+import random
+import requests
+from typing import Dict, List, Optional, Any, Union
 import google.generativeai as genai
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 def llm_call(
     messages: List[Dict[str, str]],
@@ -16,7 +21,10 @@ def llm_call(
     max_tokens: Optional[int] = None,
     stream: bool = False,
     response_format: Optional[Dict[str, Any]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None
+    tools: Optional[List[Dict[str, Any]]] = None,
+    timeout: int = 60,
+    retries: int = 2,
+    retry_delay: float = 1.0
 ) -> Dict[str, Any]:
     """
     Make an API call to a language model using Google's Gemini API.
@@ -32,14 +40,19 @@ def llm_call(
         response_format (dict, optional): Format specification for the response.
         tools (list, optional): List of tool definitions.
         stream (bool, optional): Whether to stream the response.
+        timeout (int, optional): Timeout in seconds for API call.
+        retries (int, optional): Number of retries if API call fails.
+        retry_delay (float, optional): Delay between retries in seconds.
         
     Returns:
         dict: The model response in a standardized format.
         
     Raises:
         ValueError: If API key is missing and not in test mode.
-        Exception: If the API call fails.
+        Exception: If the API call fails after all retries.
     """
+    logger = logging.getLogger(__name__)
+    
     # Get API key from environment variable
     api_key = os.getenv("GOOGLE_API_KEY")
     
@@ -91,6 +104,58 @@ def llm_call(
         else:
             prompt += f"{content}\n\n"
     
+    # Implement API call with retries and timeout
+    for attempt in range(retries + 1):
+        try:
+            logger.debug(f"Making API call to Gemini (attempt {attempt+1}/{retries+1})")
+            start_time = time.time()
+            
+            # Use ThreadPoolExecutor to enforce timeout
+            with ThreadPoolExecutor() as executor:
+                # Create a future for the API call
+                future = executor.submit(
+                    _execute_gemini_call,
+                    model=model,
+                    prompt=prompt,
+                    generation_config=generation_config,
+                    stream=stream
+                )
+                
+                try:
+                    # Wait for the future to complete with a timeout
+                    response = future.result(timeout=timeout)
+                    execution_time = time.time() - start_time
+                    logger.debug(f"API call completed in {execution_time:.2f} seconds")
+                    return response
+                    
+                except TimeoutError:
+                    logger.error(f"API timeout after {timeout} seconds (attempt {attempt+1}/{retries+1})")
+                    future.cancel()  # Attempt to cancel the future
+                    if attempt < retries:
+                        logger.info(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                        # Increase delay for subsequent retries
+                        retry_delay *= 1.5
+                    else:
+                        raise Exception(f"API call failed after {retries+1} attempts due to timeout")
+                
+        except Exception as e:
+            if "timeout" not in str(e).lower():  # Don't log timeout errors twice
+                logger.error(f"API call error: {str(e)} (attempt {attempt+1}/{retries+1})")
+            
+            if attempt < retries:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                # Increase delay for subsequent retries
+                retry_delay *= 1.5
+            else:
+                raise Exception(f"API call failed after {retries+1} attempts: {str(e)}")
+
+def _execute_gemini_call(model, prompt, generation_config, stream):
+    """
+    Execute the actual Gemini API call.
+    This is separated to allow for timeout handling.
+    """
     try:
         # Create the model and generate content
         model_instance = genai.GenerativeModel(model)

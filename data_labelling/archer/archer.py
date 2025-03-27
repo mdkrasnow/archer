@@ -14,6 +14,9 @@ Note:
 
 import os
 import random
+import logging
+import time
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Callable, Union, Tuple, Optional
 from archer.helpers.prompt import Prompt
 from archer.backwardPass.promptOptimizer import PromptOptimizer
@@ -76,7 +79,11 @@ class Archer:
                  num_simulations_per_prompt: int = 3,
                  database_config: Optional[Dict[str, Any]] = None,
                  adalflow_enabled: bool = False,
-                 adalflow_config: Optional[Dict[str, Any]] = None):
+                 adalflow_config: Optional[Dict[str, Any]] = None,
+                 argilla_connection: Any = None,
+                 error_threshold: int = 3,  # Number of errors before circuit breaks
+                 recovery_time: int = 3600,  # Time in seconds to wait before retrying after circuit breaks
+                 temperature: float = 0.7):
         """
         Initialize a new Archer instance.
 
@@ -105,6 +112,10 @@ class Archer:
             database_config: Configuration for the database (Argilla) integration.
             adalflow_enabled: Whether to use AdaLflow for prompt optimization.
             adalflow_config: Configuration for AdaLflow integration.
+            argilla_connection: Connection to Argilla database.
+            error_threshold: Number of consecutive errors before circuit breaker trips.
+            recovery_time: Time in seconds to wait before retrying after circuit breaks.
+            temperature: Temperature for LLM generation.
         """
         if evaluation_fields is None:
             evaluation_fields = ['score', 'feedback', 'improved_output', 'summary']
@@ -196,6 +207,18 @@ class Archer:
         # Store candidate prompts for evaluation
         self.candidate_prompts = []
 
+        # Track optimization state
+        self._optimization_errors = 0
+        self._last_optimization_attempt = datetime.now()
+        self._circuit_open = False
+        self._error_threshold = error_threshold
+        self._recovery_time = timedelta(seconds=recovery_time)
+
+        # Initialize components
+        self.argilla_connection = argilla_connection
+        self.model_name = generator_model_name
+        self.temperature = temperature
+
     @property
     def active_prompts(self):
         """
@@ -273,73 +296,113 @@ class Archer:
         
         return all_evaluations
 
-    def run_backward_pass(self, evaluations: list) -> None:
+    def run_backward_pass(self, evaluations: list) -> bool:
         """
-        Runs the backward pass: optimizes prompts based on generation evaluations.
-
+        Run the backward pass to optimize prompts based on evaluations.
+        
         Args:
             evaluations: List of tuples (Prompt, generated content, evaluation result dict).
-        """
-        if not evaluations:
-            logger.warning("No evaluations provided for backward pass")
-            return
             
-        # Extract prompts and evaluation data for optimization
-        prompts = [eval_item[0] for eval_item in evaluations]
-        feedback_map = {str(i): eval_item[2].get('feedback', '') for i, eval_item in enumerate(evaluations)}
+        Returns:
+            bool: True if optimization was successful, False otherwise.
+        """
+        self.logger.info("Starting backward pass optimization")
         
-        # Handle scores safely
-        score_map = {}
-        for i, eval_item in enumerate(evaluations):
-            score = eval_item[2].get('score')
-            if score is None:
-                score = 3.0  # Default score
-            try:
-                score_map[str(i)] = float(score)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid score value '{score}' for evaluation {i}, using default 3.0")
-                score_map[str(i)] = 3.0
+        # Check if circuit breaker is open (too many recent errors)
+        if self._circuit_open:
+            time_since_last_attempt = datetime.now() - self._last_optimization_attempt
+            if time_since_last_attempt < self._recovery_time:
+                remaining_time = (self._recovery_time - time_since_last_attempt).total_seconds()
+                self.logger.warning(
+                    f"Circuit breaker is open. Optimization temporarily disabled for "
+                    f"{remaining_time:.0f} more seconds after repeated failures."
+                )
+                return False
+            else:
+                # Reset circuit breaker after recovery time
+                self.logger.info("Circuit breaker reset after recovery period")
+                self._circuit_open = False
+                self._optimization_errors = 0
         
-        # Optimize prompts using the proper optimizer approach
-        if self.adalflow_enabled:
-            try:
-                # AdaLFlow-based optimization with detailed gradients
-                model = self._build_adalflow_model_from_prompts(prompts)
-                optimization_successful = self.optimizer.optimize_model(model, feedback_map, score_map)
-                if not optimization_successful:
-                    logger.info("Falling back to regular optimization")
+        # Track optimization attempt time
+        self._last_optimization_attempt = datetime.now()
+        
+        try:
+            # Extract prompts and evaluation data for optimization
+            prompts = [eval_item[0] for eval_item in evaluations]
+            feedback_map = {str(i): eval_item[2].get('feedback', '') for i, eval_item in enumerate(evaluations)}
+            
+            # Handle scores safely
+            score_map = {}
+            for i, eval_item in enumerate(evaluations):
+                score = eval_item[2].get('score')
+                if score is None:
+                    score = 3.0  # Default score
+                try:
+                    score_map[str(i)] = float(score)
+                except (ValueError, TypeError):
+                    self.logger.warning(f"Invalid score value '{score}' for evaluation {i}, using default 3.0")
+                    score_map[str(i)] = 3.0
+            
+            # Optimize prompts using the proper optimizer approach
+            if self.adalflow_enabled:
+                try:
+                    # AdaLFlow-based optimization with detailed gradients
+                    model = self._build_adalflow_model_from_prompts(prompts)
+                    optimization_successful = self.optimizer.optimize_model(model, feedback_map, score_map)
+                    if not optimization_successful:
+                        self.logger.info("Falling back to regular optimization")
+                        new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
+                        self.active_generator_prompts = new_prompts
+                        self.generator.set_prompts(new_prompts)
+                    else:
+                        self.logger.info("AdaLFlow model optimization successful")
+                        # Update active prompts from the model's prompts
+                        self.active_generator_prompts = list(model.prompts.values())
+                except Exception as e:
+                    self.logger.error(f"Error in AdaLFlow optimization: {str(e)}")
+                    # Fall back to regular optimization
+                    self.logger.info("Exception occurred. Falling back to regular optimization")
                     new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
                     self.active_generator_prompts = new_prompts
                     self.generator.set_prompts(new_prompts)
-                else:
-                    logger.info("AdaLFlow model optimization successful")
-                    # Update active prompts from the model's prompts
-                    self.active_generator_prompts = list(model.prompts.values())
-            except Exception as e:
-                logger.error(f"Error in AdaLFlow optimization: {str(e)}")
-                # Fall back to regular optimization
-                logger.info("Exception occurred. Falling back to regular optimization")
+            else:
+                # Standard optimization
                 new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
-                self.active_generator_prompts = new_prompts
-                self.generator.set_prompts(new_prompts)
-        else:
-            # Standard optimization
-            new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
+                
+                # Update the active prompts with the optimized ones
+                best_prompts = self._evaluate_and_select_best_prompts(new_prompts)
+                self.active_generator_prompts = best_prompts
+                self.generator.set_prompts(best_prompts)
             
-            # Update the active prompts with the optimized ones
-            best_prompts = self._evaluate_and_select_best_prompts(new_prompts)
-            self.active_generator_prompts = best_prompts
-            self.generator.set_prompts(best_prompts)
-        
-        # Update performance tracking
-        self.performance_tracker.update_prompt_performance(prompts, evaluations)
-        
-        # Store optimized prompts in the database if available
-        if self.database:
-            for prompt in self.active_generator_prompts:
-                # The prompts are already stored in records, no need for separate storage
-                # We can update lineage information if needed
-                pass
+            # Update performance tracking
+            self.performance_tracker.update_prompt_performance(prompts, evaluations)
+            
+            # Store optimized prompts in the database if available
+            if self.database:
+                for prompt in self.active_generator_prompts:
+                    # The prompts are already stored in records, no need for separate storage
+                    # We can update lineage information if needed
+                    pass
+
+            # Reset error count on successful completion
+            self._optimization_errors = 0
+            return True
+            
+        except Exception as e:
+            # Increment error count
+            self._optimization_errors += 1
+            self.logger.error(f"Error in backward pass: {str(e)}")
+            
+            # Check if we need to trip the circuit breaker
+            if self._optimization_errors >= self._error_threshold:
+                self._circuit_open = True
+                self.logger.error(
+                    f"Circuit breaker tripped after {self._optimization_errors} consecutive errors. "
+                    f"Optimization disabled for {self._recovery_time.total_seconds()} seconds."
+                )
+            
+            return False
 
     def _generate_prompt_variants(self, base_prompts: List[Prompt]) -> List[Prompt]:
         """
