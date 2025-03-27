@@ -90,12 +90,10 @@ class AIExpert:
         try:
             # Mock API key for testing purposes
             response = self.llm_call(messages=messages, model=self.model_name, openrouter_api_key=os.getenv("OPENROUTER_API_KEY"))
-            print("response", response)
             
             # Parse the response
             if response and "choices" in response and len(response["choices"]) > 0:
                 content = response["choices"][0]["message"]["content"]
-                print("content", content)
                 
                 # Parse content to extract structured data
                 lines = content.strip().split('\n')
