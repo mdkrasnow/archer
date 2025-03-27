@@ -280,10 +280,25 @@ class Archer:
         Args:
             evaluations: List of tuples (Prompt, generated content, evaluation result dict).
         """
+        if not evaluations:
+            logger.warning("No evaluations provided for backward pass")
+            return
+            
         # Extract prompts and evaluation data for optimization
         prompts = [eval_item[0] for eval_item in evaluations]
         feedback_map = {str(i): eval_item[2].get('feedback', '') for i, eval_item in enumerate(evaluations)}
-        score_map = {str(i): eval_item[2].get('score', 0.0) for i, eval_item in enumerate(evaluations)}
+        
+        # Handle scores safely
+        score_map = {}
+        for i, eval_item in enumerate(evaluations):
+            score = eval_item[2].get('score')
+            if score is None:
+                score = 3.0  # Default score
+            try:
+                score_map[str(i)] = float(score)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid score value '{score}' for evaluation {i}, using default 3.0")
+                score_map[str(i)] = 3.0
         
         # Optimize prompts using the proper optimizer approach
         if self.adalflow_enabled:

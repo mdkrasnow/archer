@@ -406,9 +406,19 @@ class DanielsonArcherApp:
                             from data_labelling.archer.helpers.prompt import Prompt
                             prompt_obj = Prompt("Generate an evaluation for component {component_id} based on {input}")
                     
+                    # Get score with safe default
+                    score_value = evaluation.get("score")
+                    if score_value is None:
+                        score = 3.0  # Default score if missing
+                    else:
+                        try:
+                            score = float(score_value)
+                        except (ValueError, TypeError):
+                            score = 3.0  # Default on conversion error
+                    
                     # Create evaluation dict
                     eval_dict = {
-                        "score": float(evaluation.get("score", 3)),
+                        "score": score,
                         "feedback": evaluation.get("feedback", ""),
                         "improved_output": evaluation.get("improved_output", "")
                     }

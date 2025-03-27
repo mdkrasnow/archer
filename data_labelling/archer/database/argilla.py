@@ -627,9 +627,15 @@ class ArgillaDatabase:
                 ai_score = None
                 if "responses" in record:
                     for response in record["responses"]:
-                        if response["question"]["name"] == "ai_score":
-                            ai_score = float(response["value"])
-                            break
+                        question = response.get("question", {})
+                        question_name = question.get("name", "")
+                        if question_name == "score":
+                            value = response.get("value")
+                            ai_score = float(value) if value is not None else None
+                        elif question_name == "feedback":
+                            ai_feedback = response.get("value", "")
+                        elif question_name == "improved_output":
+                            ai_improved_output = response.get("value", "")
                 
                 if ai_score is not None:
                     # Find the round number for this record
@@ -729,7 +735,9 @@ class ArgillaDatabase:
                 avg_score = 0
                 if "responses" in prompt:
                     for response in prompt["responses"]:
-                        if response["question"]["name"] == "average_score":
+                        question = response.get("question", {})
+                        question_name = question.get("name", "")
+                        if question_name == "average_score":
                             avg_score = float(response["value"])
                             break
                 # If not in responses, try metadata
@@ -941,21 +949,27 @@ class ArgillaDatabase:
                 # Handle both dict and object access patterns for records
                 if isinstance(latest, dict) and "responses" in latest:
                     for response in latest["responses"]:
-                        if response["question"]["name"] == "score":
-                            evaluation["score"] = int(response["value"])
-                        elif response["question"]["name"] == "feedback":
-                            evaluation["feedback"] = response["value"]
-                        elif response["question"]["name"] == "improved_output":
-                            evaluation["improved_output"] = response["value"]
+                        question = response.get("question", {})
+                        question_name = question.get("name", "")
+                        if question_name == "score":
+                            value = response.get("value")
+                            evaluation["score"] = float(value) if value is not None else None
+                        elif question_name == "feedback":
+                            evaluation["feedback"] = response.get("value", "")
+                        elif question_name == "improved_output":
+                            evaluation["improved_output"] = response.get("value", "")
                 elif hasattr(latest, 'responses'):
                     for response in latest.responses:
+                        question = response.get("question", {})
+                        question_name = question.get("name", "")
                         if hasattr(response, 'question') and hasattr(response.question, 'name'):
                             if response.question.name == "score":
-                                evaluation["score"] = int(response.value)
+                                value = response.get("value")
+                                evaluation["score"] = float(value) if value is not None else None
                             elif response.question.name == "feedback":
-                                evaluation["feedback"] = response.value
+                                evaluation["feedback"] = response.get("value", "")
                             elif response.question.name == "improved_output":
-                                evaluation["improved_output"] = response.value
+                                evaluation["improved_output"] = response.get("value", "")
                 
                 return evaluation
                 
@@ -1033,7 +1047,8 @@ class ArgillaDatabase:
                             question = response.get("question", {})
                             question_name = question.get("name", "")
                             if question_name == "score":
-                                score = float(response.get("value", 0))
+                                value = response.get("value")
+                                score = float(value) if value is not None else None
                             elif question_name == "feedback":
                                 feedback = response.get("value", "")
                             elif question_name == "improved_output":
