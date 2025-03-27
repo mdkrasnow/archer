@@ -29,6 +29,10 @@ from archer.helpers.visualization import PerformanceTracker
 # from database.argilla import ArgillaDB
 
 
+# Configure module logger
+logger = logging.getLogger(__name__)
+
+
 def load_knowledge_from_directories(directories: list) -> list:
     """
     Load all text documents from a list of directories.
@@ -126,6 +130,9 @@ class Archer:
         if variation_traits is None:
             variation_traits = []
 
+        # Set up logging
+        self.logger = logging.getLogger(__name__)
+        
         # Basic configuration
         self.input_spec = input_spec
         self.output_spec = output_spec
