@@ -72,7 +72,7 @@ class ArgillaDatabase:
                 if not success:
                     return False
             
-            # Check which datasets already exist
+            # Check which 
             existing_datasets = {ds.name: ds for ds in self.client.datasets}
             self.datasets = {}
             
