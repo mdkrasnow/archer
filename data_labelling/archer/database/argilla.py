@@ -73,7 +73,7 @@ class ArgillaDatabase:
                     return False
             
             # Check which datasets already exist
-            existing_datasets = {ds.name: ds for ds in self.client.list_datasets()}
+            existing_datasets = {ds.name: ds for ds in self.client.datasets}
             self.datasets = {}
             
             # Initialize all required datasets
