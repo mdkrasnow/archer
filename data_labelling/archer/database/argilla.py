@@ -1077,7 +1077,7 @@ class ArgillaDatabase:
                     metadata=[
                         rg.TermsMetadataProperty(name="prompt_id", title="Prompt ID"),
                         rg.TermsMetadataProperty(name="parent_prompt_id", title="Parent Prompt ID"),
-                        rg.TermsMetadataProperty(name="average_score", title="Average Score"),
+                        rg.TermsMetadataProperty(name="avg_score_metadata", title="Average Score"),
                         rg.TermsMetadataProperty(name="rounds_survived", title="Rounds Survived"),
                         rg.TermsMetadataProperty(name="is_active", title="Is Active"),
                         rg.TermsMetadataProperty(name="created_at", title="Created At"),
@@ -1552,7 +1552,7 @@ class ArgillaDatabase:
                 metadata={
                     "prompt_id": prompt_id,
                     "parent_prompt_id": parent_prompt_id or "root",
-                    "average_score": "0.0",
+                    "avg_score_metadata": "0.0",
                     "rounds_survived": "0",
                     "is_active": "True",
                     "created_at": datetime.now().isoformat(),
@@ -1686,7 +1686,7 @@ class ArgillaDatabase:
             updated_record = rg.Record(
                 id=record["id"],
                 metadata={
-                    "average_score": str(avg_score),
+                    "avg_score_metadata": str(avg_score),
                     "rounds_survived": str(rounds_survived),
                     "is_active": str(is_active).lower()
                 }
@@ -2330,7 +2330,7 @@ class ArgillaDatabase:
                 prompt_data.append({
                     "id": prompt["metadata"].get("prompt_id", "unknown"),
                     "content": prompt["fields"]["content"],
-                    "average_score": float(prompt["metadata"].get("average_score", 0)),
+                    "average_score": float(prompt["metadata"].get("avg_score_metadata", 0)),
                     "rounds_survived": int(prompt["metadata"].get("rounds_survived", 0)),
                     "version": int(prompt["metadata"].get("version", 1)),
                     "parent_prompt_id": prompt["metadata"].get("parent_prompt_id", "root")
