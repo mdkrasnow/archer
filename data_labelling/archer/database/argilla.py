@@ -614,7 +614,7 @@ class ArgillaDatabase:
             logger.error(f"Error getting data for annotation: {str(e)}")
             return None
     
-    def get_performance_metrics(self, max_rounds: int = 10) -> Dict[str, Any]:
+    def get_performance_metrics(self, max_rounds: int = 2) -> Dict[str, Any]:
         """
         Get performance metrics for visualization.
         

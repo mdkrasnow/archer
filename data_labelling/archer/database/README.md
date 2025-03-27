@@ -107,7 +107,7 @@ annotation_data = db.get_current_data_for_annotation(
 )
 
 # Get performance metrics
-metrics = db.get_performance_metrics(max_rounds=5)
+metrics = db.get_performance_metrics(max_rounds=2)
 
 # Get prompt evolution history
 prompt_history = db.get_prompt_history()

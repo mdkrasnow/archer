@@ -125,7 +125,8 @@ def main():
     # Initialize the application
     app = DanielsonArcherApp(
         archer_instance=archer_instance,
-        argilla_db=argilla_db
+        argilla_db=argilla_db,
+        max_rounds=2
     )
     
     # Launch the application

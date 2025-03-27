@@ -67,7 +67,9 @@ class DanielsonArcherApp:
                 danielson_model: Optional[DanielsonModel] = None,
                 argilla_db: Optional[ArgillaDatabase] = None,
                 api_url: Optional[str] = None,
-                api_key: Optional[str] = None):
+                api_key: Optional[str] = None,
+                max_rounds: int = 2):
+        
         """
         Initialize the DanielsonArcherApp instance.
         
@@ -115,6 +117,8 @@ class DanielsonArcherApp:
         self.current_round = 1
         self.current_output_id = None
         self.app = None
+        self.max_rounds = max_rounds
+
         
     def _get_evaluation_rubric(self) -> str:
         """
@@ -324,6 +328,10 @@ class DanielsonArcherApp:
         """
         logger = logging.getLogger(__name__)
         logger.info("Triggering backward pass")
+
+        if self.current_round >= self.max_rounds:
+            logger.info("Maximum number of rounds reached. Terminating backward pass optimization.")
+            return False
         
         try:
             if self.archer is None:
