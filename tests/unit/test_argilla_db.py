@@ -519,5 +519,137 @@ class TestArgillaDatabase(unittest.TestCase):
             self.assertIn("average_score", result)
             self.assertIn("total_records", result)
             
+    def test_get_validated_evaluations(self):
+        """Test the get_validated_evaluations method with human-validated evaluations."""
+        # Add "evaluations" to the datasets dictionary
+        self.db.datasets["evaluations"] = MagicMock()
+        
+        # Create mock records for the evaluations
+        mock_records = [
+            {
+                "metadata": {
+                    "output_id": "output-123",
+                    "prompt_id": "prompt-456",
+                    "is_human": "1",
+                    "timestamp": "2025-03-27T01:00:00Z"
+                },
+                "fields": {
+                    "input": "Test input 1",
+                    "generated_content": "Test content 1"
+                },
+                "responses": [
+                    {
+                        "question": {"name": "score"},
+                        "value": "4"
+                    },
+                    {
+                        "question": {"name": "feedback"},
+                        "value": "Good output"
+                    },
+                    {
+                        "question": {"name": "improved_output"},
+                        "value": "Better output 1"
+                    }
+                ]
+            },
+            {
+                "metadata": {
+                    "output_id": "output-789",
+                    "prompt_id": "prompt-456",
+                    "is_human": "1",
+                    "timestamp": "2025-03-27T02:00:00Z" 
+                },
+                "fields": {
+                    "input": "Test input 2",
+                    "generated_content": "Test content 2"
+                },
+                "responses": [
+                    {
+                        "question": {"name": "score"},
+                        "value": "3"
+                    },
+                    {
+                        "question": {"name": "feedback"},
+                        "value": "Average output"
+                    },
+                    {
+                        "question": {"name": "improved_output"},
+                        "value": "Better output 2"
+                    }
+                ]
+            }
+        ]
+        
+        # Mock the Filter, Query and records methods
+        mock_filter = MagicMock()
+        mock_query = MagicMock()
+        mock_records_result = MagicMock()
+        mock_records_result.to_list.return_value = mock_records
+        
+        with patch('argilla.Filter', return_value=mock_filter) as mock_filter_class, \
+             patch('argilla.Query', return_value=mock_query) as mock_query_class:
+            # Set up the mock records result
+            self.db.datasets["evaluations"].records.return_value = mock_records_result
+            
+            # Test with default limit
+            result = self.db.get_validated_evaluations()
+            
+            # Verify the filter was created correctly
+            mock_filter_class.assert_called_once_with(("metadata.is_human", "==", "1"))
+            mock_query_class.assert_called_once_with(filter=mock_filter)
+            
+            # Check the result
+            self.assertIsInstance(result, pd.DataFrame)
+            self.assertEqual(len(result), 2)
+            
+            # Check the values in the DataFrame
+            self.assertEqual(result.iloc[0]["output_id"], "output-789")  # Should be first because of timestamp sort
+            self.assertEqual(result.iloc[1]["output_id"], "output-123")
+            self.assertEqual(result.iloc[0]["score"], 3.0)
+            self.assertEqual(result.iloc[1]["score"], 4.0)
+            
+            # Test with custom limit
+            result = self.db.get_validated_evaluations(limit=1)
+            
+            # Check that limit is respected
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result.iloc[0]["output_id"], "output-789")  # Only get the newest one
+            
+    def test_get_validated_evaluations_empty(self):
+        """Test the get_validated_evaluations method when no validated evaluations exist."""
+        # Add "evaluations" to the datasets dictionary
+        self.db.datasets["evaluations"] = MagicMock()
+        
+        # Mock empty records result
+        mock_filter = MagicMock()
+        mock_query = MagicMock()
+        mock_records_result = MagicMock()
+        mock_records_result.to_list.return_value = []
+        
+        with patch('argilla.Filter', return_value=mock_filter), \
+             patch('argilla.Query', return_value=mock_query):
+            # Set up the mock records result
+            self.db.datasets["evaluations"].records.return_value = mock_records_result
+            
+            # Test the method
+            result = self.db.get_validated_evaluations()
+            
+            # Check the result
+            self.assertIsInstance(result, pd.DataFrame)
+            self.assertTrue(result.empty)
+            
+    def test_get_validated_evaluations_error(self):
+        """Test the get_validated_evaluations method when an error occurs."""
+        # Add "evaluations" to the datasets dictionary
+        self.db.datasets["evaluations"] = MagicMock()
+        
+        # Mock an error in the query
+        with patch('argilla.Filter', side_effect=Exception("Test error")):
+            # Test the method
+            result = self.db.get_validated_evaluations()
+            
+            # Check the result
+            self.assertIsNone(result)
+
 if __name__ == '__main__':
     unittest.main() 

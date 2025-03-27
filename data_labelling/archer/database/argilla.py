@@ -951,6 +951,100 @@ class ArgillaDatabase:
             logger.error(f"Error getting latest evaluation: {str(e)}")
             return None
     
+    def get_validated_evaluations(self, limit: int = 10) -> Optional[pd.DataFrame]:
+        """
+        Get evaluations that have been validated by humans.
+        
+        Args:
+            limit: Maximum number of evaluations to return (default: 10)
+            
+        Returns:
+            pd.DataFrame: DataFrame containing the validated evaluations, or None if error
+        """
+        try:
+            # Ensure connection to Argilla
+            if not self.client:
+                logger.info("No client connection, attempting to connect")
+                success = self.connect()
+                if not success:
+                    logger.error("Failed to connect to Argilla server")
+                    return None
+            
+            # Check if evaluations dataset exists and is properly initialized
+            if "evaluations" not in self.datasets or self.datasets["evaluations"] is None:
+                logger.info("Evaluations dataset not loaded yet, initializing datasets")
+                success = self.initialize_datasets()
+                if not success:
+                    logger.error("Failed to initialize datasets")
+                    return None
+            
+            # Query for evaluations with human validation
+            # Filter evaluations where is_human = "1"
+            human_filter = rg.Filter(("metadata.is_human", "==", "1"))
+            query = rg.Query(filter=human_filter)
+            
+            try:
+                records = self.datasets["evaluations"].records(query=query).to_list(flatten=True)
+                
+                if not records:
+                    logger.info("No validated evaluations found")
+                    return pd.DataFrame()
+                
+                # Sort by timestamp (most recent first)
+                records.sort(key=lambda x: x["metadata"].get("timestamp", ""), reverse=True)
+                
+                # Limit the number of records
+                records = records[:limit]
+                
+                # Build DataFrame with required columns
+                rows = []
+                for record in records:
+                    # Extract relevant data from the record
+                    output_id = record["metadata"].get("output_id", "")
+                    prompt_id = record["metadata"].get("prompt_id", "")
+                    timestamp = record["metadata"].get("timestamp", "")
+                    
+                    # Extract score, feedback and improved output from responses
+                    score, feedback, improved_output = None, "", ""
+                    if "responses" in record:
+                        for response in record["responses"]:
+                            if response["question"]["name"] == "score":
+                                score = float(response["value"])
+                            elif response["question"]["name"] == "feedback":
+                                feedback = response["value"]
+                            elif response["question"]["name"] == "improved_output":
+                                improved_output = response["value"]
+                    
+                    # Get the original input and generated content
+                    input_data = record["fields"].get("input", "")
+                    generated_content = record["fields"].get("generated_content", "")
+                    
+                    row = {
+                        "output_id": output_id,
+                        "prompt_id": prompt_id,
+                        "input": input_data,
+                        "generated_content": generated_content,
+                        "score": score,
+                        "feedback": feedback,
+                        "improved_output": improved_output,
+                        "timestamp": timestamp
+                    }
+                    rows.append(row)
+                
+                # Create DataFrame
+                df = pd.DataFrame(rows)
+                
+                logger.info(f"Retrieved {len(df)} validated evaluations")
+                return df
+                
+            except Exception as query_error:
+                logger.error(f"Error querying for validated evaluations: {str(query_error)}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting validated evaluations: {str(e)}")
+            return None
+    
     def _initialize_records_dataset(self) -> bool:
         """
         Initialize the Records dataset.
