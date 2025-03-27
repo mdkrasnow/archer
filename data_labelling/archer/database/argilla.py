@@ -79,6 +79,12 @@ class ArgillaDatabase:
             # Initialize Records Dataset with integrated prompt fields
             dataset_creation_results["records"] = self._initialize_records_dataset()
             
+            # Initialize Generator Prompts Dataset
+            dataset_creation_results["generator_prompts"] = self._initialize_generator_prompts_dataset()
+            
+            # Initialize Evaluator Prompts Dataset
+            dataset_creation_results["evaluator_prompts"] = self._initialize_evaluator_prompts_dataset()
+            
             # Initialize Rounds Dataset
             dataset_creation_results["rounds"] = self._initialize_rounds_dataset()
             
@@ -1113,7 +1119,8 @@ class ArgillaDatabase:
         try:
             # Check if dataset exists
             try:
-                records_dataset = self.client.datasets("archer_records")
+                # Fix: Use get_dataset instead of datasets()
+                records_dataset = self.client.get_dataset("archer_records")
                 if records_dataset is not None:
                     self.datasets["records"] = records_dataset
                     logger.info("Found existing records dataset")
@@ -1185,8 +1192,8 @@ class ArgillaDatabase:
                 new_dataset = rg.Dataset(name="archer_records", settings=records_settings)
                 new_dataset.create()
                 
-                # Verify creation worked by fetching again
-                self.datasets["records"] = self.client.datasets("archer_records")
+                # Verify creation worked by fetching again with the correct method
+                self.datasets["records"] = self.client.get_dataset("archer_records")
                 if self.datasets["records"] is None:
                     raise Exception("Failed to create archer_records dataset")
                 
@@ -1207,7 +1214,8 @@ class ArgillaDatabase:
         try:
             # Check if dataset exists
             try:
-                prompts_dataset = self.client.datasets("archer_generator_prompts")
+                # Fix: Use get_dataset instead of datasets()
+                prompts_dataset = self.client.get_dataset("archer_generator_prompts")
                 if prompts_dataset is not None:
                     self.datasets["generator_prompts"] = prompts_dataset
                     logger.info("Found existing generator prompts dataset")
@@ -1252,8 +1260,8 @@ class ArgillaDatabase:
                 new_dataset = rg.Dataset(name="archer_generator_prompts", settings=prompts_settings)
                 new_dataset.create()
                 
-                # Verify creation worked by fetching again
-                self.datasets["generator_prompts"] = self.client.datasets("archer_generator_prompts")
+                # Verify creation worked by fetching again with the correct method
+                self.datasets["generator_prompts"] = self.client.get_dataset("archer_generator_prompts")
                 if self.datasets["generator_prompts"] is None:
                     raise Exception("Failed to create archer_generator_prompts dataset")
                 
@@ -1274,7 +1282,8 @@ class ArgillaDatabase:
         try:
             # Check if dataset exists
             try:
-                prompts_dataset = self.client.datasets("archer_evaluator_prompts")
+                # Fix: Use get_dataset instead of datasets()
+                prompts_dataset = self.client.get_dataset("archer_evaluator_prompts")
                 if prompts_dataset is not None:
                     self.datasets["evaluator_prompts"] = prompts_dataset
                     logger.info("Found existing evaluator prompts dataset")
@@ -1316,8 +1325,8 @@ class ArgillaDatabase:
                 new_dataset = rg.Dataset(name="archer_evaluator_prompts", settings=prompts_settings)
                 new_dataset.create()
                 
-                # Verify creation worked by fetching again
-                self.datasets["evaluator_prompts"] = self.client.datasets("archer_evaluator_prompts")
+                # Verify creation worked by fetching again with the correct method
+                self.datasets["evaluator_prompts"] = self.client.get_dataset("archer_evaluator_prompts")
                 if self.datasets["evaluator_prompts"] is None:
                     raise Exception("Failed to create archer_evaluator_prompts dataset")
                 
@@ -1338,7 +1347,8 @@ class ArgillaDatabase:
         try:
             # Check if dataset exists
             try:
-                rounds_dataset = self.client.datasets("archer_rounds")
+                # Fix: Use get_dataset instead of datasets()
+                rounds_dataset = self.client.get_dataset("archer_rounds")
                 if rounds_dataset is not None:
                     self.datasets["rounds"] = rounds_dataset
                     logger.info("Found existing rounds dataset")
@@ -1381,8 +1391,8 @@ class ArgillaDatabase:
                 new_dataset = rg.Dataset(name="archer_rounds", settings=rounds_settings)
                 new_dataset.create()
                 
-                # Verify creation worked by fetching again
-                self.datasets["rounds"] = self.client.datasets("archer_rounds")
+                # Verify creation worked by fetching again with the correct method
+                self.datasets["rounds"] = self.client.get_dataset("archer_rounds")
                 if self.datasets["rounds"] is None:
                     raise Exception("Failed to create archer_rounds dataset")
                 
@@ -1403,7 +1413,8 @@ class ArgillaDatabase:
         try:
             # Check if dataset exists
             try:
-                lineage_dataset = self.client.datasets("archer_prompt_lineage")
+                # Fix: Use get_dataset instead of datasets()
+                lineage_dataset = self.client.get_dataset("archer_prompt_lineage")
                 if lineage_dataset is not None:
                     self.datasets["prompt_lineage"] = lineage_dataset
                     logger.info("Found existing prompt lineage dataset")
@@ -1446,8 +1457,8 @@ class ArgillaDatabase:
                 new_dataset = rg.Dataset(name="archer_prompt_lineage", settings=lineage_settings)
                 new_dataset.create()
                 
-                # Verify creation worked by fetching again
-                self.datasets["prompt_lineage"] = self.client.datasets("archer_prompt_lineage")
+                # Verify creation worked by fetching again with the correct method
+                self.datasets["prompt_lineage"] = self.client.get_dataset("archer_prompt_lineage")
                 if self.datasets["prompt_lineage"] is None:
                     raise Exception("Failed to create archer_prompt_lineage dataset")
                 
@@ -1468,7 +1479,8 @@ class ArgillaDatabase:
         try:
             # Check if dataset already exists
             try:
-                outputs_dataset = self.client.datasets("archer_outputs")
+                # Fix: Use get_dataset instead of datasets() which doesn't have list_datasets
+                outputs_dataset = self.client.get_dataset("archer_outputs")
                 if outputs_dataset is not None:
                     self.datasets["outputs"] = outputs_dataset
                     logger.info("Found existing outputs dataset")
@@ -1506,8 +1518,8 @@ class ArgillaDatabase:
                 new_dataset = rg.Dataset(name="archer_outputs", settings=outputs_settings)
                 new_dataset.create()
                 
-                # Verify creation worked by fetching again
-                self.datasets["outputs"] = self.client.datasets("archer_outputs")
+                # Verify creation worked by fetching again using the corrected method
+                self.datasets["outputs"] = self.client.get_dataset("archer_outputs")
                 if self.datasets["outputs"] is None:
                     raise Exception("Failed to create archer_outputs dataset")
                 
@@ -1528,7 +1540,8 @@ class ArgillaDatabase:
         try:
             # Check if dataset exists
             try:
-                evaluations_dataset = self.client.datasets("archer_evaluations")
+                # Fix: Use get_dataset instead of datasets()
+                evaluations_dataset = self.client.get_dataset("archer_evaluations")
                 if evaluations_dataset is not None:
                     self.datasets["evaluations"] = evaluations_dataset
                     logger.info("Found existing evaluations dataset")
@@ -1579,8 +1592,8 @@ class ArgillaDatabase:
                 new_dataset = rg.Dataset(name="archer_evaluations", settings=evaluations_settings)
                 new_dataset.create()
                 
-                # Verify creation worked by fetching again
-                self.datasets["evaluations"] = self.client.datasets("archer_evaluations")
+                # Verify creation worked by fetching again using correct method
+                self.datasets["evaluations"] = self.client.get_dataset("archer_evaluations")
                 if self.datasets["evaluations"] is None:
                     raise Exception("Failed to create archer_evaluations dataset")
                 
