@@ -159,8 +159,28 @@ class SupabaseDatabase:
     def store_generated_content(self, input_data: str, content: str, prompt_id: str, round_num: int) -> Optional[str]:
         """
         Store generated content in the archer_outputs table.
+        
+        Args:
+            input_data: The input data used for generation
+            content: The generated content
+            prompt_id: ID of the prompt used for generation (must be a valid ID from archer_prompts)
+            round_num: The round number
+            
+        Returns:
+            The output ID if successful, None otherwise
         """
         try:
+            # Verify the prompt ID exists in the prompts table
+            prompt_exists = False
+            try:
+                response = self.client.table("archer_prompts").select("id").eq("id", prompt_id).execute()
+                prompt_exists = response and hasattr(response, 'data') and len(response.data) > 0
+            except Exception:
+                logger.warning(f"Failed to verify if prompt ID exists: {prompt_id}")
+            
+            if not prompt_exists:
+                logger.warning(f"Prompt ID {prompt_id} does not exist in prompts table. Content may not be properly associated.")
+            
             output_id = str(uuid.uuid4())
             data = {
                 "id": output_id,
@@ -182,6 +202,16 @@ class SupabaseDatabase:
     def store_evaluation(self, output_id: str, score: int, feedback: str, improved_output: str, is_human: bool = False) -> bool:
         """
         Store an evaluation for a given output in the archer_evaluations table.
+        
+        Args:
+            output_id: ID of the output being evaluated
+            score: Integer score for the evaluation
+            feedback: Feedback text
+            improved_output: Improved version of the output
+            is_human: Whether this is a human evaluation
+            
+        Returns:
+            True if successful, False otherwise
         """
         try:
             # Retrieve the original output for reference
@@ -189,6 +219,21 @@ class SupabaseDatabase:
             if not output:
                 logger.error(f"Output with ID {output_id} not found")
                 return False
+
+            # Get prompt ID from output and verify it exists
+            prompt_id = output.get("prompt_id", "")
+            if not prompt_id:
+                logger.warning(f"Output {output_id} is missing prompt_id")
+                # Try to find a matching prompt by content
+                try:
+                    prompt_content = output.get("generated_content", "")[:100]  # Use part of content as a signature
+                    if prompt_content:
+                        records = self.client.table("archer_records").select("generator_prompt_id").eq("generated_content", output.get("generated_content", "")).execute()
+                        if records and hasattr(records, 'data') and records.data:
+                            prompt_id = records.data[0].get("generator_prompt_id", "")
+                            logger.info(f"Found prompt ID {prompt_id} by content matching")
+                except Exception as e:
+                    logger.error(f"Error finding prompt by content: {str(e)}")
 
             evaluation_id = str(uuid.uuid4())
             
@@ -208,7 +253,7 @@ class SupabaseDatabase:
                 "feedback": feedback,
                 "improved_output": improved_output,
                 "output_id": output_id,
-                "prompt_id": output.get("prompt_id"),
+                "prompt_id": prompt_id,
                 "evaluator_id": "human" if is_human else "ai_evaluator",
                 "is_human": is_human,
                 "timestamp": datetime.now().isoformat(),
@@ -600,6 +645,12 @@ class SupabaseDatabase:
     def get_validated_evaluations(self, limit: int = 10) -> Optional[pd.DataFrame]:
         """
         Retrieve evaluations that have been validated by humans.
+        
+        Args:
+            limit: Maximum number of evaluations to retrieve
+            
+        Returns:
+            DataFrame containing validated evaluations with all required fields
         """
         try:
             success, records = self._safe_execute(
@@ -615,16 +666,24 @@ class SupabaseDatabase:
             rows = []
             for record in records:
                 row = {
-                    "output_id": record.get("output_id"),
-                    "prompt_id": record.get("prompt_id"),
-                    "input": record.get("input"),
-                    "generated_content": record.get("generated_content"),
-                    "score": record.get("score"),
-                    "feedback": record.get("feedback"),
-                    "improved_output": record.get("improved_output"),
-                    "timestamp": record.get("timestamp")
+                    "output_id": record.get("output_id", ""),
+                    "prompt_id": record.get("prompt_id", ""),
+                    "input": record.get("input", ""),
+                    "generated_content": record.get("generated_content", ""),
+                    "score": record.get("score", 0),
+                    "feedback": record.get("feedback", ""),
+                    "improved_output": record.get("improved_output", ""),
+                    "timestamp": record.get("timestamp", ""),
+                    "evaluator_id": record.get("evaluator_id", "")
                 }
+                
+                # Skip if missing required data
+                if not row["prompt_id"]:
+                    logger.warning(f"Skipping evaluation with missing prompt_id for output: {row['output_id']}")
+                    continue
+                
                 rows.append(row)
+                
             df = pd.DataFrame(rows)
             logger.info(f"Retrieved {len(df)} validated evaluations")
             return df
@@ -632,10 +691,21 @@ class SupabaseDatabase:
             logger.error(f"Exception in get_validated_evaluations: {str(e)}")
             return pd.DataFrame()
 
-    def store_record(self, input_data: str, content: str, generator_prompt: str, evaluator_prompt: str,
+    def store_record(self, input_data: str, content: str, generator_prompt_id: str, evaluator_prompt_id: str,
                      prompt_generation: int, round_id: str) -> Optional[str]:
         """
         Store a new record in the archer_records table.
+        
+        Args:
+            input_data: The input data used for generation
+            content: The generated content
+            generator_prompt_id: ID of the generator prompt used
+            evaluator_prompt_id: ID of the evaluator prompt used
+            prompt_generation: Generation number of the prompt
+            round_id: ID of the round
+            
+        Returns:
+            The record ID if successful, None otherwise
         """
         try:
             record_id = str(uuid.uuid4())
@@ -643,8 +713,8 @@ class SupabaseDatabase:
                 "id": record_id,
                 "input": input_data,
                 "generated_content": content,
-                "generator_prompt_id": generator_prompt,
-                "evaluator_prompt_id": evaluator_prompt,
+                "generator_prompt_id": generator_prompt_id,
+                "evaluator_prompt_id": evaluator_prompt_id,
                 "prompt_generation": prompt_generation,
                 "round_id": round_id,
                 "validated_status": False,

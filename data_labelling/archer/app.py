@@ -181,14 +181,25 @@ class GradioApp:
             transformed_evaluations = []
             for eval_data in evaluations:
                 try:
-                    prompt_content = eval_data.get('prompt', '')
+                    # Get prompt ID and fetch the actual prompt content from the database
+                    prompt_id = eval_data.get('prompt_id')
+                    if not prompt_id:
+                        logger.warning(f"Missing prompt_id in evaluation for output {eval_data.get('output_id')}")
+                        continue
+                    
+                    # Fetch prompt content from database
+                    prompt_content = self.db._get_prompt_text(prompt_id)
+                    if not prompt_content:
+                        logger.warning(f"Could not find prompt content for ID: {prompt_id}")
+                        continue
+                    
                     prompt = Prompt(
                         content=prompt_content,
                         score=eval_data.get('score', 3.0),
                         feedback_or_generation=eval_data.get('feedback', '')
                     )
                     transformed_evaluations.append(
-                        (prompt, eval_data.get('generated_text', ''), eval_data)
+                        (prompt, eval_data.get('generated_content', ''), eval_data)
                     )
                 except Exception as e:
                     logger.error(f"Error transforming evaluation: {str(e)}")

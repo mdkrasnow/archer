@@ -294,11 +294,15 @@ class Archer:
 
                 # Store record with integrated prompt information if database is available
                 if self.database:
+                    # Get prompt ID from database or store new prompt to get ID
+                    generator_prompt_id = self.database.store_prompt(prompt.content, "generator")
+                    evaluator_prompt_id = self.database.store_prompt(self.evaluator.get_current_prompt(), "evaluator")
+                    
                     self.database.store_record(
                         input_data=str(input_row),
                         content=content,
-                        generator_prompt=prompt.content,
-                        evaluator_prompt=self.evaluator.get_current_prompt(),
+                        generator_prompt_id=generator_prompt_id,
+                        evaluator_prompt_id=evaluator_prompt_id,
                         prompt_generation=prompt.generation,
                         round_id=str(self.generation_count)
                     )

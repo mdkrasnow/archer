@@ -126,7 +126,7 @@ def main():
     app = DanielsonArcherApp(
         archer_instance=archer_instance,
         supabase_db=supabase_db,
-        max_rounds=2
+        max_rounds=1
     )
     
     # Launch the application

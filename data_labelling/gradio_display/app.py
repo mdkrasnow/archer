@@ -68,7 +68,7 @@ class DanielsonArcherApp:
                 supabase_db: Optional[SupabaseDatabase] = None,
                 api_url: Optional[str] = None,
                 api_key: Optional[str] = None,
-                max_rounds: int = 2):
+                max_rounds: int = 1):
         
         """
         Initialize the DanielsonArcherApp instance.

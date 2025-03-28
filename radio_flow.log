@@ -1,0 +1,80 @@
+2025-03-28 10:59:59,730 - httpx - DEBUG - load_ssl_context verify=True cert=None trust_env=True http2=False
+2025-03-28 10:59:59,731 - httpx - DEBUG - load_verify_locations cafile='/opt/anaconda3/lib/python3.11/site-packages/certifi/cacert.pem'
+2025-03-28 10:59:59,816 - httpx - DEBUG - load_ssl_context verify=True cert=None trust_env=True http2=False
+2025-03-28 10:59:59,817 - httpx - DEBUG - load_verify_locations cafile='/opt/anaconda3/lib/python3.11/site-packages/certifi/cacert.pem'
+2025-03-28 10:59:59,826 - httpx - DEBUG - load_ssl_context verify=True cert=None trust_env=True http2=False
+2025-03-28 10:59:59,827 - httpx - DEBUG - load_verify_locations cafile='/opt/anaconda3/lib/python3.11/site-packages/certifi/cacert.pem'
+2025-03-28 10:59:59,849 - httpx - DEBUG - load_ssl_context verify=True cert=None trust_env=True http2=False
+2025-03-28 10:59:59,850 - httpx - DEBUG - load_verify_locations cafile='/opt/anaconda3/lib/python3.11/site-packages/certifi/cacert.pem'
+2025-03-28 10:59:59,862 - httpcore.connection - DEBUG - connect_tcp.started host='api.gradio.app' port=443 local_address=None timeout=3 socket_options=None
+2025-03-28 10:59:59,961 - PIL.Image - DEBUG - Importing BlpImagePlugin
+2025-03-28 10:59:59,962 - PIL.Image - DEBUG - Importing BmpImagePlugin
+2025-03-28 10:59:59,962 - PIL.Image - DEBUG - Importing BufrStubImagePlugin
+2025-03-28 10:59:59,963 - PIL.Image - DEBUG - Importing CurImagePlugin
+2025-03-28 10:59:59,963 - PIL.Image - DEBUG - Importing DcxImagePlugin
+2025-03-28 10:59:59,964 - PIL.Image - DEBUG - Importing DdsImagePlugin
+2025-03-28 10:59:59,967 - PIL.Image - DEBUG - Importing EpsImagePlugin
+2025-03-28 10:59:59,968 - PIL.Image - DEBUG - Importing FitsImagePlugin
+2025-03-28 10:59:59,969 - PIL.Image - DEBUG - Importing FliImagePlugin
+2025-03-28 10:59:59,969 - PIL.Image - DEBUG - Importing FpxImagePlugin
+2025-03-28 10:59:59,970 - PIL.Image - DEBUG - Image: failed to import FpxImagePlugin: No module named 'olefile'
+2025-03-28 10:59:59,970 - PIL.Image - DEBUG - Importing FtexImagePlugin
+2025-03-28 10:59:59,970 - PIL.Image - DEBUG - Importing GbrImagePlugin
+2025-03-28 10:59:59,971 - PIL.Image - DEBUG - Importing GifImagePlugin
+2025-03-28 10:59:59,973 - PIL.Image - DEBUG - Importing GribStubImagePlugin
+2025-03-28 10:59:59,974 - PIL.Image - DEBUG - Importing Hdf5StubImagePlugin
+2025-03-28 10:59:59,974 - PIL.Image - DEBUG - Importing IcnsImagePlugin
+2025-03-28 10:59:59,975 - PIL.Image - DEBUG - Importing IcoImagePlugin
+2025-03-28 10:59:59,976 - PIL.Image - DEBUG - Importing ImImagePlugin
+2025-03-28 10:59:59,976 - PIL.Image - DEBUG - Importing ImtImagePlugin
+2025-03-28 10:59:59,977 - PIL.Image - DEBUG - Importing IptcImagePlugin
+2025-03-28 10:59:59,977 - PIL.Image - DEBUG - Importing JpegImagePlugin
+2025-03-28 10:59:59,978 - PIL.Image - DEBUG - Importing Jpeg2KImagePlugin
+2025-03-28 10:59:59,978 - PIL.Image - DEBUG - Importing McIdasImagePlugin
+2025-03-28 10:59:59,978 - PIL.Image - DEBUG - Importing MicImagePlugin
+2025-03-28 10:59:59,979 - PIL.Image - DEBUG - Image: failed to import MicImagePlugin: No module named 'olefile'
+2025-03-28 10:59:59,979 - PIL.Image - DEBUG - Importing MpegImagePlugin
+2025-03-28 10:59:59,979 - PIL.Image - DEBUG - Importing MpoImagePlugin
+2025-03-28 10:59:59,981 - PIL.Image - DEBUG - Importing MspImagePlugin
+2025-03-28 10:59:59,982 - PIL.Image - DEBUG - Importing PalmImagePlugin
+2025-03-28 10:59:59,983 - PIL.Image - DEBUG - Importing PcdImagePlugin
+2025-03-28 10:59:59,983 - PIL.Image - DEBUG - Importing PcxImagePlugin
+2025-03-28 10:59:59,983 - PIL.Image - DEBUG - Importing PdfImagePlugin
+2025-03-28 10:59:59,987 - PIL.Image - DEBUG - Importing PixarImagePlugin
+2025-03-28 10:59:59,988 - PIL.Image - DEBUG - Importing PngImagePlugin
+2025-03-28 10:59:59,988 - PIL.Image - DEBUG - Importing PpmImagePlugin
+2025-03-28 10:59:59,988 - PIL.Image - DEBUG - Importing PsdImagePlugin
+2025-03-28 10:59:59,988 - PIL.Image - DEBUG - Importing QoiImagePlugin
+2025-03-28 10:59:59,989 - PIL.Image - DEBUG - Importing SgiImagePlugin
+2025-03-28 10:59:59,989 - PIL.Image - DEBUG - Importing SpiderImagePlugin
+2025-03-28 10:59:59,989 - PIL.Image - DEBUG - Importing SunImagePlugin
+2025-03-28 10:59:59,990 - PIL.Image - DEBUG - Importing TgaImagePlugin
+2025-03-28 10:59:59,990 - PIL.Image - DEBUG - Importing TiffImagePlugin
+2025-03-28 10:59:59,990 - PIL.Image - DEBUG - Importing WebPImagePlugin
+2025-03-28 10:59:59,992 - PIL.Image - DEBUG - Importing WmfImagePlugin
+2025-03-28 10:59:59,993 - PIL.Image - DEBUG - Importing XbmImagePlugin
+2025-03-28 10:59:59,993 - PIL.Image - DEBUG - Importing XpmImagePlugin
+2025-03-28 10:59:59,994 - PIL.Image - DEBUG - Importing XVThumbImagePlugin
+2025-03-28 10:59:59,994 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x10b36ca50>
+2025-03-28 10:59:59,994 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x10b4591c0> server_hostname='api.gradio.app' timeout=3
+2025-03-28 11:00:00,199 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x105696850>
+2025-03-28 11:00:00,199 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'GET']>
+2025-03-28 11:00:00,200 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-03-28 11:00:00,200 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'GET']>
+2025-03-28 11:00:00,200 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-03-28 11:00:00,200 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'GET']>
+2025-03-28 11:00:00,291 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Fri, 28 Mar 2025 15:00:00 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'3'), (b'Connection', b'keep-alive'), (b'Server', b'nginx/1.18.0'), (b'Access-Control-Allow-Origin', b'*')])
+2025-03-28 11:00:00,291 - httpx - INFO - HTTP Request: GET https://api.gradio.app/gradio-messaging/en "HTTP/1.1 200 OK"
+2025-03-28 11:00:00,292 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'GET']>
+2025-03-28 11:00:00,292 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-03-28 11:00:00,292 - httpcore.http11 - DEBUG - response_closed.started
+2025-03-28 11:00:00,292 - httpcore.http11 - DEBUG - response_closed.complete
+2025-03-28 11:00:00,292 - httpcore.connection - DEBUG - close.started
+2025-03-28 11:00:00,292 - httpcore.connection - DEBUG - close.complete
+2025-03-28 11:00:00,595 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-03-28 11:00:01,662 - matplotlib - DEBUG - matplotlib data path: /opt/anaconda3/lib/python3.11/site-packages/matplotlib/mpl-data
+2025-03-28 11:00:01,666 - matplotlib - DEBUG - CONFIGDIR=/Users/mkrasnow/.matplotlib
+2025-03-28 11:00:01,667 - matplotlib - DEBUG - interactive is False
+2025-03-28 11:00:01,667 - matplotlib - DEBUG - platform is darwin
+2025-03-28 11:00:01,710 - matplotlib - DEBUG - CACHEDIR=/Users/mkrasnow/.matplotlib
+2025-03-28 11:00:01,712 - matplotlib.font_manager - DEBUG - Using fontManager instance from /Users/mkrasnow/.matplotlib/fontlist-v330.json
