@@ -29,13 +29,13 @@ class SupabaseDatabase:
       - archer_evaluations: Stores evaluations (AI and human) of generated outputs.
     """
 
-    def __init__(self, supabase_url: Optional[str] = None, supabase_key: Optional[str] = None):
+    def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None):
         """
         Initialize the SupabaseDatabase instance using Supabase URL and API key.
         """
-        self.supabase_url = supabase_url or os.getenv("SUPABASE_URL")
-        self.supabase_key = supabase_key or os.getenv("SUPABASE_KEY")
-        self.client: Client = create_client(self.supabase_url, self.supabase_key)
+        self.api_url = api_url or os.getenv("SUPABASE_API_URL")
+        self.api_key = api_key or os.getenv("SUPABASE_API_KEY")
+        self.client: Client = create_client(self.api_url, self.api_key)
         self.user_id = "default_user"
 
     def store_generated_content(self, input_data: str, content: str, prompt_id: str, round_num: int) -> Optional[str]:
