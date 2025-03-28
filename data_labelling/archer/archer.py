@@ -367,23 +367,36 @@ class Archer:
                     if not optimization_successful:
                         self.logger.info("Falling back to regular optimization")
                         new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
+                        # Save variants to database directly
+                        if self.database:
+                            self.optimizer.save_variants_to_database(new_prompts, self.database)
                         self.active_generator_prompts = new_prompts
                         self.generator.set_prompts(new_prompts)
                     else:
                         self.logger.info("AdaLFlow model optimization successful")
                         # Update active prompts from the model's prompts
                         self.active_generator_prompts = list(model.prompts.values())
+                        # Save variants to database directly
+                        if self.database:
+                            self.optimizer.save_variants_to_database(self.active_generator_prompts, self.database)
                 except Exception as e:
                     self.logger.error(f"Error in AdaLFlow optimization: {str(e)}")
                     # Fall back to regular optimization
                     self.logger.info("Exception occurred. Falling back to regular optimization")
                     new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
+                    # Save variants to database directly
+                    if self.database:
+                        self.optimizer.save_variants_to_database(new_prompts, self.database)
                     self.active_generator_prompts = new_prompts
                     self.generator.set_prompts(new_prompts)
             else:
                 # Standard optimization
                 new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
                 
+                # Save variants to database directly
+                if self.database:
+                    self.optimizer.save_variants_to_database(new_prompts, self.database)
+                    
                 # Update the active prompts with the optimized ones
                 best_prompts = self._evaluate_and_select_best_prompts(new_prompts)
                 self.active_generator_prompts = best_prompts
@@ -392,30 +405,9 @@ class Archer:
             # Update performance tracking
             self.performance_tracker.update_prompt_performance(prompts, evaluations)
             
-            # Store optimized prompts in the database if available
-            if self.database:
-                self.logger.info(f"Storing {len(self.active_generator_prompts)} optimized prompts in database")
-                for i, prompt in enumerate(self.active_generator_prompts):
-                    # Store each prompt in the database
-                    prompt_id = self.database.store_generator_prompt(
-                        content=prompt.content,
-                        version=prompt.generation
-                    )
-                    self.logger.info(f"Stored optimized prompt {i+1} with ID: {prompt_id}")
-                    
-                    # Update performance metrics for the prompt
-                    if prompt_id:
-                        success = self.database.update_generator_prompt_performance(
-                            prompt_id=prompt_id,
-                            avg_score=prompt.score,
-                            rounds_survived=1,  # This is a new prompt
-                            is_active=True
-                        )
-                        if success:
-                            self.logger.info(f"Updated performance metrics for prompt ID: {prompt_id}")
-                        else:
-                            self.logger.warning(f"Failed to update performance metrics for prompt ID: {prompt_id}")
-
+            # No longer need to store optimized prompts here since we've directly saved them
+            # using save_variants_to_database above
+            
             # Reset error count on successful completion
             self._optimization_errors = 0
             return True
@@ -607,9 +599,30 @@ class Archer:
         Returns:
             Built model.
         """
-        # This method should be implemented based on the specific model building logic
-        # For now, we'll return a placeholder model
-        return None
+        # This is a placeholder implementation - in a real application,
+        # you would create a Model instance based on the specific requirements
+        if not hasattr(self, 'prompt_evaluator'):
+            self.prompt_evaluator = None
+            
+        # Generate evaluation input data
+        eval_inputs = self._generate_evaluation_inputs(self.validation_attempts_per_param)
+            
+        # Create a mapping of prompt_id -> feedback and prompt_id -> score
+        # This would normally come from actual evaluation data
+        feedback_map = {str(i): prompt.feedback or "" for i, prompt in enumerate(prompts)}
+        score_map = {str(i): prompt.score or 0.0 for i, prompt in enumerate(prompts)}
+        
+        # Perform model-based optimization with database connection
+        best_prompts = self.optimizer.optimize_model_with_evaluation(
+            model=None,  # Placeholder
+            feedback_map=feedback_map,
+            score_map=score_map,
+            input_data=eval_inputs,
+            prompt_evaluator=self.prompt_evaluator,
+            database=self.database  # Pass the database for saving variants
+        )
+        
+        return best_prompts
 
     def run_training_cycle(self, input_data: Any) -> list:
         """

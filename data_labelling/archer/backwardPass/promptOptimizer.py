@@ -560,6 +560,9 @@ class PromptOptimizer:
                     )
                     logger.info(f"Generated {len(variants)} additional variants")
                     new_prompts.extend(variants)
+                    
+                    # The variation is complete - stop the optimization process here
+                    logger.info("Optimization and variation completed - stopping optimization process")
                 except Exception as e:
                     logger.error(f"Error generating variants: {str(e)}")
                 
@@ -679,6 +682,9 @@ class PromptOptimizer:
                     generation_time = time.time() - start_time
                     logger.info(f"Generated {len(variants)} variants in {generation_time:.2f} seconds")
                     new_prompts.extend(variants)
+                    
+                    # The variation is complete - stop the optimization process here
+                    logger.info("Optimization and variation completed - stopping optimization process")
                 except concurrent.futures.TimeoutError:
                     logger.error("Timeout exceeded while generating variants, proceeding with optimized prompts only")
                     future.cancel()
@@ -692,6 +698,52 @@ class PromptOptimizer:
             return prompt_objs
         
         return new_prompts
+        
+    def save_variants_to_database(self, variants, database, parent_prompt_id=None):
+        """
+        Save generated prompt variants to the database.
+        
+        Args:
+            variants: List of Prompt objects to save
+            database: Database instance with store_generator_prompt method
+            parent_prompt_id: Optional ID of the parent prompt
+            
+        Returns:
+            List of IDs of the saved variants
+        """
+        if not database or not hasattr(database, 'store_generator_prompt'):
+            logger.warning("No valid database connection for saving variants")
+            return []
+            
+        logger.info(f"Saving {len(variants)} variants to database")
+        saved_ids = []
+        
+        for i, variant in enumerate(variants):
+            try:
+                prompt_id = database.store_generator_prompt(
+                    content=variant.content,
+                    parent_prompt_id=parent_prompt_id,
+                    version=variant.generation
+                )
+                
+                if prompt_id:
+                    logger.info(f"Saved variant {i+1} with ID: {prompt_id}")
+                    saved_ids.append(prompt_id)
+                    
+                    # Update performance metrics
+                    success = database.update_generator_prompt_performance(
+                        prompt_id=prompt_id,
+                        avg_score=variant.score or 0.0,
+                        rounds_survived=1,  # New variant
+                        is_active=True
+                    )
+                    
+                    if not success:
+                        logger.warning(f"Failed to update performance for variant {i+1}")
+            except Exception as e:
+                logger.error(f"Error saving variant {i+1}: {str(e)}")
+                
+        return saved_ids
 
     def optimize_model(self, model, feedback_map, score_map):
         """
@@ -790,14 +842,16 @@ class PromptOptimizer:
                     except Exception as e:
                         logger.error(f"Error updating prompt {prompt_id}: {str(e)}")
             
+            # The optimization is complete - stop the process here
             logger.info(f"Updated {updates_count} prompts in the model")
+            logger.info("Model optimization completed - stopping optimization process")
             return True
             
         except Exception as e:
             logger.error(f"Error optimizing model: {str(e)}")
             return False
-    
-    def optimize_model_with_evaluation(self, model, feedback_map, score_map, input_data, prompt_evaluator):
+
+    def optimize_model_with_evaluation(self, model, feedback_map, score_map, input_data, prompt_evaluator, database=None):
         """
         Optimize prompts in a Model instance using the integrated prompt structure.
         
@@ -807,6 +861,7 @@ class PromptOptimizer:
             score_map: prompt_id -> float score mapping.
             input_data: Data to use for evaluating new prompts.
             prompt_evaluator: PromptEvaluator instance for evaluating new prompts.
+            database: Optional database connection to save variants
             
         Returns:
             List of best performing Prompt objects after optimization and evaluation.
@@ -839,6 +894,10 @@ class PromptOptimizer:
                 num_variants=3
             )
             variant_prompts.extend(variants)
+            
+            # Save variants to database if available
+            if database:
+                self.save_variants_to_database(variants, database, parent_prompt_id=prompt_id)
         
         # Step 3: Add all prompts to a combined list for evaluation
         all_prompts = list(model.prompts.values()) + variant_prompts
