@@ -26,7 +26,7 @@ from archer.forwardPass.generator import GenerativeModel
 from archer.forwardPass.human.human import HumanValidation
 from archer.helpers.visualization import PerformanceTracker
 # Assuming we'll implement Argilla integration, import placeholder:
-# from database.argilla import ArgillaDB
+# from database.supabase import ArgillaDB
 
 
 # Configure module logger
@@ -84,7 +84,7 @@ class Archer:
                  database_config: Optional[Dict[str, Any]] = None,
                  adalflow_enabled: bool = False,
                  adalflow_config: Optional[Dict[str, Any]] = None,
-                 argilla_connection: Any = None,
+                 supabase_connection: Any = None,
                  error_threshold: int = 3,  # Number of errors before circuit breaks
                  recovery_time: int = 3600,  # Time in seconds to wait before retrying after circuit breaks
                  temperature: float = 0.7):
@@ -116,7 +116,7 @@ class Archer:
             database_config: Configuration for the database (Argilla) integration.
             adalflow_enabled: Whether to use AdaLflow for prompt optimization.
             adalflow_config: Configuration for AdaLflow integration.
-            argilla_connection: Connection to Argilla database.
+            supabase_connection: Connection to Argilla database.
             error_threshold: Number of consecutive errors before circuit breaker trips.
             recovery_time: Time in seconds to wait before retrying after circuit breaks.
             temperature: Temperature for LLM generation.
@@ -198,8 +198,8 @@ class Archer:
         
         # Initialize database if config is provided
         if database_config:
-            from archer.database.argilla import ArgillaDatabase
-            self.database = ArgillaDatabase(**database_config)
+            from data_labelling.archer.database.supabase import SupabaseDatabase
+            self.database = SupabaseDatabase(**database_config)
             self.database.connect()
             self.database.initialize_datasets()
         else:
@@ -222,7 +222,7 @@ class Archer:
         self._recovery_time = timedelta(seconds=recovery_time)
 
         # Initialize components
-        self.argilla_connection = argilla_connection
+        self.supabase_connection = supabase_connection
         self.model_name = generator_model_name
         self.temperature = temperature
 

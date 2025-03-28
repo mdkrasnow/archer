@@ -20,14 +20,14 @@ if [ -z "$OPENROUTER_API_KEY" ]; then
     echo "Warning: OPENROUTER_API_KEY is not set. Some features may not work properly."
 fi
 
-if [ -z "$ARGILLA_API_URL" ]; then
-    echo "Warning: ARGILLA_API_URL is not set. Using default (http://localhost:6900)."
-    export ARGILLA_API_URL="http://localhost:6900"
+if [ -z "$SUPABASE_API_URL" ]; then
+    echo "Warning: SUPABASE_API_URL is not set. Using default (http://localhost:6900)."
+    export SUPABASE_API_URL="http://localhost:6900"
 fi
 
-if [ -z "$ARGILLA_API_KEY" ]; then
-    echo "Warning: ARGILLA_API_KEY is not set. Using default (admin.apikey)."
-    export ARGILLA_API_KEY="admin.apikey"
+if [ -z "$SUPABASE_API_KEY" ]; then
+    echo "Warning: SUPABASE_API_KEY is not set. Using default (admin.apikey)."
+    export SUPABASE_API_KEY="admin.apikey"
 fi
 
 # Check for Python

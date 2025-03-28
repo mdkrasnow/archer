@@ -34,7 +34,7 @@ The diagram also highlights key files and their purpose:
 - `app.py`: The Gradio interface implementation
 - `promptOptimizer.py`: Code for improving prompts based on evaluation
 - `evaluator.py`: Code for evaluating generated content
-- `argilla.py`: Database interface implementation
+- `supabase.py`: Database interface implementation
 
 ## 3. Data Flow Diagram (`data_flow.md`)
 
@@ -81,7 +81,7 @@ These diagrams reflect the actual structure found in the codebase:
 2. The forward pass components (`generator`, `evaluator`) handle content creation and assessment.
 3. The backward pass components (`promptOptimizer`, `PromptEvaluator`) handle prompt improvement.
 4. The Gradio UI (`app.py`) provides the human interface for validation and visualization.
-5. The Argilla database integration (`argilla.py`) provides persistent storage for all system data.
+5. The Argilla database integration (`supabase.py`) provides persistent storage for all system data.
 
 The core optimization process follows these steps in code:
 1. The `run_forward_pass` method in `Archer` class generates and evaluates content

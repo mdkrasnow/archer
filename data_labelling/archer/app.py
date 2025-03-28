@@ -23,7 +23,7 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 # Import after path is set
-from archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 from archer.helpers.prompt import Prompt
 
 # Track optimization status
@@ -41,7 +41,7 @@ class GradioApp:
     """
     
     def __init__(self, archer_instance: Optional[Any] = None, 
-                argilla_db: Optional[ArgillaDatabase] = None,
+                supabase_db: Optional[SupabaseDatabase] = None,
                 api_url: Optional[str] = None,
                 api_key: Optional[str] = None):
         """
@@ -49,13 +49,13 @@ class GradioApp:
         
         Args:
             archer_instance: Instance of the Archer class (optional)
-            argilla_db: Instance of the ArgillaDatabase class (optional)
+            supabase_db: Instance of the SupabaseDatabase class (optional)
             api_url: URL of the Argilla server (optional)
             api_key: API key for authentication (optional)
         """
         self.archer = archer_instance
-        # Create a new ArgillaDatabase instance if one wasn't provided
-        self.db = argilla_db or ArgillaDatabase(api_url=api_url, api_key=api_key)
+        # Create a new SupabaseDatabase instance if one wasn't provided
+        self.db = supabase_db or SupabaseDatabase(api_url=api_url, api_key=api_key)
         # Connect to the database and initialize datasets
         self.db.connect()
         self.db.initialize_datasets()

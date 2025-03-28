@@ -8,12 +8,12 @@ import uuid
 
 # Adjust path to import the module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from data_labelling.archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 
-class TestArgillaDatabase(unittest.TestCase):
+class TestSupabaseDatabase(unittest.TestCase):
     def setUp(self):
         # Setup mocks and test database
-        self.db = ArgillaDatabase(api_url="mock_url", api_key="mock_key")
+        self.db = SupabaseDatabase(api_url="mock_url", api_key="mock_key")
         # Mock the Argilla client
         self.db.client = MagicMock()
         self.db.user_id = "test_user"
@@ -28,31 +28,31 @@ class TestArgillaDatabase(unittest.TestCase):
 
     def test_connect(self):
         # Create a fresh database instance
-        db = ArgillaDatabase(api_url="mock_url", api_key="mock_key")
+        db = SupabaseDatabase(api_url="mock_url", api_key="mock_key")
         
         # Mock the Argilla client instantiation
-        with patch('argilla.Argilla') as mock_argilla:
+        with patch('supabase.Argilla') as mock_supabase:
             # Setup mock user info
             mock_client = MagicMock()
             mock_user = MagicMock()
             mock_user.id = "test_user_id"
             mock_client.me = mock_user
-            mock_argilla.return_value = mock_client
+            mock_supabase.return_value = mock_client
             
             # Test the connect method
             result = db.connect()
             
             # Assert the result and that the client was instantiated
             self.assertTrue(result)
-            mock_argilla.assert_called_once_with(api_url="mock_url", api_key="mock_key")
+            mock_supabase.assert_called_once_with(api_url="mock_url", api_key="mock_key")
             self.assertEqual(db.user_id, "test_user_id")
     
     def test_connect_error(self):
         # Create a fresh database instance
-        db = ArgillaDatabase(api_url="mock_url", api_key="mock_key")
+        db = SupabaseDatabase(api_url="mock_url", api_key="mock_key")
         
         # Mock the Argilla client to raise an exception
-        with patch('argilla.Argilla', side_effect=Exception("Connection error")):
+        with patch('supabase.Argilla', side_effect=Exception("Connection error")):
             # Test the connect method
             result = db.connect()
             
@@ -221,8 +221,8 @@ class TestArgillaDatabase(unittest.TestCase):
         mock_records = MagicMock()
         mock_records.to_list.return_value = [{"id": prompt_id}]
         
-        with patch('argilla.Filter', return_value=mock_filter) as mock_filter_class, \
-             patch('argilla.Query', return_value=mock_query) as mock_query_class:
+        with patch('supabase.Filter', return_value=mock_filter) as mock_filter_class, \
+             patch('supabase.Query', return_value=mock_query) as mock_query_class:
             self.db.datasets["generator_prompts"].records.return_value = mock_records
             
             # Mock the dataset's records.log method
@@ -308,8 +308,8 @@ class TestArgillaDatabase(unittest.TestCase):
         
         mock_records.to_list.return_value = test_records
         
-        with patch('argilla.Filter', return_value=mock_filter) as mock_filter_class, \
-             patch('argilla.Query', return_value=mock_query) as mock_query_class:
+        with patch('supabase.Filter', return_value=mock_filter) as mock_filter_class, \
+             patch('supabase.Query', return_value=mock_query) as mock_query_class:
             self.db.datasets["records"].records.return_value = mock_records
             
             # Test the get_current_data_for_annotation method
@@ -476,8 +476,8 @@ class TestArgillaDatabase(unittest.TestCase):
         mock_records = MagicMock()
         mock_records.to_list.return_value = [test_evaluator_prompts[0]]  # Only return active prompts
         
-        with patch('argilla.Filter', return_value=mock_filter) as mock_filter_class, \
-             patch('argilla.Query', return_value=mock_query) as mock_query_class:
+        with patch('supabase.Filter', return_value=mock_filter) as mock_filter_class, \
+             patch('supabase.Query', return_value=mock_query) as mock_query_class:
             self.db.datasets["evaluator_prompts"].records.return_value = mock_records
             
             # Test the get_active_evaluator_prompts method
@@ -507,8 +507,8 @@ class TestArgillaDatabase(unittest.TestCase):
         mock_records = MagicMock()
         mock_records.to_list.return_value = [mock_round]
         
-        with patch('argilla.Filter', return_value=mock_filter) as mock_filter_class, \
-             patch('argilla.Query', return_value=mock_query) as mock_query_class:
+        with patch('supabase.Filter', return_value=mock_filter) as mock_filter_class, \
+             patch('supabase.Query', return_value=mock_query) as mock_query_class:
             self.db.datasets["rounds"].records.return_value = mock_records
             
             # Test the get_round_metrics method
@@ -586,8 +586,8 @@ class TestArgillaDatabase(unittest.TestCase):
         mock_records_result = MagicMock()
         mock_records_result.to_list.return_value = mock_records
         
-        with patch('argilla.Filter', return_value=mock_filter) as mock_filter_class, \
-             patch('argilla.Query', return_value=mock_query) as mock_query_class:
+        with patch('supabase.Filter', return_value=mock_filter) as mock_filter_class, \
+             patch('supabase.Query', return_value=mock_query) as mock_query_class:
             # Set up the mock records result
             self.db.datasets["evaluations"].records.return_value = mock_records_result
             
@@ -626,8 +626,8 @@ class TestArgillaDatabase(unittest.TestCase):
         mock_records_result = MagicMock()
         mock_records_result.to_list.return_value = []
         
-        with patch('argilla.Filter', return_value=mock_filter), \
-             patch('argilla.Query', return_value=mock_query):
+        with patch('supabase.Filter', return_value=mock_filter), \
+             patch('supabase.Query', return_value=mock_query):
             # Set up the mock records result
             self.db.datasets["evaluations"].records.return_value = mock_records_result
             
@@ -644,7 +644,7 @@ class TestArgillaDatabase(unittest.TestCase):
         self.db.datasets["evaluations"] = MagicMock()
         
         # Mock an error in the query
-        with patch('argilla.Filter', side_effect=Exception("Test error")):
+        with patch('supabase.Filter', side_effect=Exception("Test error")):
             # Test the method
             result = self.db.get_validated_evaluations()
             

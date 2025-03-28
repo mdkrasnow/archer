@@ -21,7 +21,7 @@ class TestDanielsonArcher(unittest.TestCase):
         """
         Set up test fixtures.
         """
-        # Mock the ArgillaDatabase
+        # Mock the SupabaseDatabase
         self.mock_db = MagicMock()
         self.mock_db.connect.return_value = True
         self.mock_db.initialize_datasets.return_value = True
@@ -40,7 +40,7 @@ class TestDanielsonArcher(unittest.TestCase):
         # Create the app instance with mocks
         self.app = DanielsonArcherApp(
             archer_instance=self.mock_archer,
-            argilla_db=self.mock_db
+            supabase_db=self.mock_db
         )
     
     def test_generate_input_data(self):
@@ -76,7 +76,7 @@ class TestDanielsonArcher(unittest.TestCase):
         # Set up the app without Archer
         app = DanielsonArcherApp(
             archer_instance=None,
-            argilla_db=self.mock_db
+            supabase_db=self.mock_db
         )
         
         # Set up the mock to return a valid result
@@ -136,7 +136,7 @@ class TestDanielsonArcher(unittest.TestCase):
         # Set up the app without Archer
         app = DanielsonArcherApp(
             archer_instance=None,
-            argilla_db=self.mock_db
+            supabase_db=self.mock_db
         )
         
         # Save the initial round

@@ -8,15 +8,15 @@ from datetime import datetime
 # Add the parent directory to the path to make imports work
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 
-class TestArgillaDatabase(unittest.TestCase):
-    """Test cases for the ArgillaDatabase class"""
+class TestSupabaseDatabase(unittest.TestCase):
+    """Test cases for the SupabaseDatabase class"""
 
     def setUp(self):
         """Set up test fixtures"""
         # Use in-memory implementation for testing
-        self.db = ArgillaDatabase(
+        self.db = SupabaseDatabase(
             api_url="http://testserver",
             api_key="test_key"
         )
@@ -58,12 +58,12 @@ class TestArgillaDatabase(unittest.TestCase):
             }
         }
         
-    @patch('argilla.Argilla')
-    def test_connect(self, mock_argilla):
+    @patch('supabase.Argilla')
+    def test_connect(self, mock_supabase):
         """Test connecting to Argilla server"""
         # Configure mock
         mock_client = MagicMock()
-        mock_argilla.return_value = mock_client
+        mock_supabase.return_value = mock_client
         
         # Mock user info
         mock_user = MagicMock()
@@ -76,16 +76,16 @@ class TestArgillaDatabase(unittest.TestCase):
         # Assertions
         self.assertTrue(result)
         self.assertEqual(self.db.user_id, "test_user_id")
-        mock_argilla.assert_called_once_with(
+        mock_supabase.assert_called_once_with(
             api_url="http://testserver",
             api_key="test_key"
         )
         
-    @patch('argilla.Argilla')
-    def test_connect_failure(self, mock_argilla):
+    @patch('supabase.Argilla')
+    def test_connect_failure(self, mock_supabase):
         """Test handling connection failure"""
         # Configure mock to raise exception
-        mock_argilla.return_value.me.side_effect = Exception("Connection error")
+        mock_supabase.return_value.me.side_effect = Exception("Connection error")
         
         # Call the method
         result = self.db.connect()
@@ -94,16 +94,16 @@ class TestArgillaDatabase(unittest.TestCase):
         self.assertFalse(result)
         
     @unittest.skip("This test requires a more complex mock setup that needs to be revisited")
-    @patch('database.argilla.rg.Dataset')
-    @patch('database.argilla.rg.Argilla')
-    def test_initialize_datasets(self, mock_argilla, mock_dataset):
+    @patch('database.supabase.rg.Dataset')
+    @patch('database.supabase.rg.Argilla')
+    def test_initialize_datasets(self, mock_supabase, mock_dataset):
         """Test initializing datasets - now with proper mocking"""
-        # Create a patched ArgillaDatabase instance for this test
-        db = ArgillaDatabase(api_url="http://testserver", api_key="test_key")
+        # Create a patched SupabaseDatabase instance for this test
+        db = SupabaseDatabase(api_url="http://testserver", api_key="test_key")
         
         # Configure mock client
         mock_client = MagicMock()
-        mock_argilla.return_value = mock_client
+        mock_supabase.return_value = mock_client
         
         # Mock user for successful connection
         mock_user = MagicMock()
@@ -161,12 +161,12 @@ class TestArgillaDatabase(unittest.TestCase):
         self.assertIn("prompts", db.datasets)
         self.assertIn("evaluations", db.datasets)
         
-    @patch('argilla.Argilla')
-    def test_store_generated_content(self, mock_argilla):
+    @patch('supabase.Argilla')
+    def test_store_generated_content(self, mock_supabase):
         """Test storing generated content"""
         # Configure mocks
         mock_client = MagicMock()
-        mock_argilla.return_value = mock_client
+        mock_supabase.return_value = mock_client
         
         # Mock the outputs dataset
         mock_outputs_dataset = MagicMock()
@@ -191,12 +191,12 @@ class TestArgillaDatabase(unittest.TestCase):
         self.assertIsNotNone(output_id)
         mock_outputs_dataset.records.log.assert_called_once()
         
-    @patch('argilla.Argilla')
-    def test_store_generated_content_failure(self, mock_argilla):
+    @patch('supabase.Argilla')
+    def test_store_generated_content_failure(self, mock_supabase):
         """Test handling failure when storing generated content"""
         # Configure mocks
         mock_client = MagicMock()
-        mock_argilla.return_value = mock_client
+        mock_supabase.return_value = mock_client
         
         # Mock the outputs dataset to raise an exception
         mock_outputs_dataset = MagicMock()
@@ -228,8 +228,8 @@ class TestArgillaDatabase(unittest.TestCase):
         self.db.connect.assert_called_once()
         self.db.initialize_datasets.assert_called_once()
         
-    @patch('argilla.Filter')
-    @patch('argilla.Query')
+    @patch('supabase.Filter')
+    @patch('supabase.Query')
     def test_get_prompt_text(self, mock_query, mock_filter):
         """Test getting prompt text by ID"""
         # Set up mock records
@@ -252,8 +252,8 @@ class TestArgillaDatabase(unittest.TestCase):
         mock_filter.assert_called_once()
         mock_query.assert_called_once()
         
-    @patch('argilla.Filter')
-    @patch('argilla.Query')
+    @patch('supabase.Filter')
+    @patch('supabase.Query')
     def test_get_output(self, mock_query, mock_filter):
         """Test getting output by ID"""
         # Set up mock records

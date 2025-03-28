@@ -9,16 +9,16 @@ import json
 
 # Adjust path to import the module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from data_labelling.archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 
-@unittest.skipIf(not os.getenv("TEST_ARGILLA_API_URL"), "Integration tests require TEST_ARGILLA_API_URL env var")
+@unittest.skipIf(not os.getenv("TEST_SUPABASE_API_URL"), "Integration tests require TEST_SUPABASE_API_URL env var")
 class TestArgillaIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Setup real database connection
-        cls.db = ArgillaDatabase(
-            api_url=os.getenv("TEST_ARGILLA_API_URL"),
-            api_key=os.getenv("TEST_ARGILLA_API_KEY", "admin.apikey")
+        cls.db = SupabaseDatabase(
+            api_url=os.getenv("TEST_SUPABASE_API_URL"),
+            api_key=os.getenv("TEST_SUPABASE_API_KEY", "admin.apikey")
         )
         # Ensure connection
         connected = cls.db.connect()

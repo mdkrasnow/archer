@@ -4,7 +4,7 @@ This module provides a robust integration between the Archer system and Argilla 
 
 ## Overview
 
-The `ArgillaDatabase` class handles all interactions with the Argilla database, including:
+The `SupabaseDatabase` class handles all interactions with the Argilla database, including:
 
 - Storing and retrieving generated content
 - Storing and retrieving evaluations
@@ -16,13 +16,13 @@ The `ArgillaDatabase` class handles all interactions with the Argilla database, 
 ### Initialization
 
 ```python
-from database.argilla import ArgillaDatabase
+from database.supabase import SupabaseDatabase
 
 # Using default environment variables
-db = ArgillaDatabase()
+db = SupabaseDatabase()
 
 # With explicit credentials
-db = ArgillaDatabase(
+db = SupabaseDatabase(
     api_url="http://localhost:6900",
     api_key="admin.apikey"
 )
@@ -115,19 +115,19 @@ prompt_history = db.get_prompt_history()
 
 ## Error Handling
 
-The ArgillaDatabase class includes robust error handling with detailed logging. All methods include try-except blocks to catch and log exceptions, returning appropriate default values when operations fail.
+The SupabaseDatabase class includes robust error handling with detailed logging. All methods include try-except blocks to catch and log exceptions, returning appropriate default values when operations fail.
 
 ## Testing
 
 Run the tests with:
 
 ```
-python -m unittest tests.test_argilla_database
+python -m unittest tests.test_supabase_database
 ```
 
 ## Dependencies
 
-- argilla
+- supabase
 - pandas
 - numpy
 - uuid

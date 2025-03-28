@@ -29,7 +29,7 @@ sys.path.append(str(Path(__file__).parent))
 # Import components
 from data_labelling.gradio_display.app import DanielsonArcherApp
 from data_labelling.archer.backwardPass.danielson_model import DanielsonModel
-from data_labelling.archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 from data_labelling.archer.archer import Archer
 from data_labelling.archer.helpers.prompt import Prompt
 
@@ -57,9 +57,9 @@ def test_radio_flow(adalflow_enabled=True, run_optimization=True, verbose=False)
         
         logger.info("Initializing database connection")
         # Use in-memory database for testing
-        db = ArgillaDatabase(
-            api_url=os.getenv("ARGILLA_API_URL", "http://localhost:6900"),
-            api_key=os.getenv("ARGILLA_API_KEY", "admin.apikey")
+        db = SupabaseDatabase(
+            api_url=os.getenv("SUPABASE_API_URL", "http://localhost:6900"),
+            api_key=os.getenv("SUPABASE_API_KEY", "admin.apikey")
         )
         
         logger.info("Initializing prompts")
@@ -87,8 +87,8 @@ def test_radio_flow(adalflow_enabled=True, run_optimization=True, verbose=False)
             num_simulations_per_prompt=3,
             adalflow_enabled=adalflow_enabled,
             database_config={
-                "api_url": os.getenv("ARGILLA_API_URL", "http://localhost:6900"),
-                "api_key": os.getenv("ARGILLA_API_KEY", "admin.apikey")
+                "api_url": os.getenv("SUPABASE_API_URL", "http://localhost:6900"),
+                "api_key": os.getenv("SUPABASE_API_KEY", "admin.apikey")
             }
         )
         
@@ -97,7 +97,7 @@ def test_radio_flow(adalflow_enabled=True, run_optimization=True, verbose=False)
         app = DanielsonArcherApp(
             archer_instance=archer,
             danielson_model=danielson_model,
-            argilla_db=db
+            supabase_db=db
         )
         
         # Step 1: Generate input data

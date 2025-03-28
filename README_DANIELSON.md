@@ -27,8 +27,8 @@ Before running the application, ensure you have:
 2. Required Python packages (install with `pip install -r requirements.txt`)
 3. Environment variables set in a `.env` file:
    - `OPENROUTER_API_KEY`: API key for accessing language models
-   - `ARGILLA_API_URL`: URL for the Argilla database (default: http://localhost:6900)
-   - `ARGILLA_API_KEY`: API key for Argilla (default: admin.apikey)
+   - `SUPABASE_API_URL`: URL for the Argilla database (default: http://localhost:6900)
+   - `SUPABASE_API_KEY`: API key for Argilla (default: admin.apikey)
 
 ## Running the Application
 
@@ -65,7 +65,7 @@ The implementation consists of several key components:
 1. **DanielsonArcherApp**: The main application class that coordinates the Gradio interface
 2. **Archer**: The prompt optimization framework with forward and backward passes
 3. **DanielsonModel**: Adapter for the Danielson framework to work with Archer
-4. **ArgillaDatabase**: Database integration for storing data and tracking performance
+4. **SupabaseDatabase**: Database integration for storing data and tracking performance
 
 ### Process Flow
 

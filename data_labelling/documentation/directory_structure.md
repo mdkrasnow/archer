@@ -50,7 +50,7 @@ graph TD
     AppPy[app.py]
     PromptOptimizerPy[promptOptimizer.py]
     EvaluatorPy[evaluator.py]
-    ArgillaPy[argilla.py]
+    ArgillaPy[supabase.py]
     
     %% File Connections
     Archer --> ArcherPy

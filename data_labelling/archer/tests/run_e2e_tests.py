@@ -31,7 +31,7 @@ def load_environment():
     load_dotenv(dotenv_path=env_path)
 
     # Check for required environment variables
-    required_vars = ['OPENROUTER_API_KEY', 'ARGILLA_API_URL', 'ARGILLA_API_KEY']
+    required_vars = ['OPENROUTER_API_KEY', 'SUPABASE_API_URL', 'SUPABASE_API_KEY']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     
     if missing_vars:

@@ -25,8 +25,8 @@ Before running the tests, ensure you have:
 1. Set up your environment variables in a `.env` file in the project root with:
    ```
    OPENROUTER_API_KEY=your_openrouter_api_key
-   ARGILLA_API_URL=your_argilla_url (e.g., http://localhost:6900)
-   ARGILLA_API_KEY=your_argilla_key (e.g., admin.apikey)
+   SUPABASE_API_URL=your_supabase_url (e.g., http://localhost:6900)
+   SUPABASE_API_KEY=your_supabase_key (e.g., admin.apikey)
    ```
 
 2. Installed all required dependencies:

@@ -24,7 +24,7 @@ sys.path.append(str(Path(__file__).parent))
 # Import the application
 from gradio_display.app import DanielsonArcherApp
 from archer.backwardPass.danielson_model import DanielsonModel
-from archer.database.argilla import ArgillaDatabase
+from archer.database.supabase import SupabaseDatabase
 from archer.archer import Archer
 from archer.helpers.prompt import Prompt
 
@@ -37,7 +37,7 @@ def load_environment():
     load_dotenv(dotenv_path=env_path)
 
     # Check for required environment variables
-    required_vars = ['OPENROUTER_API_KEY', 'ARGILLA_API_URL', 'ARGILLA_API_KEY']
+    required_vars = ['OPENROUTER_API_KEY', 'SUPABASE_API_URL', 'SUPABASE_API_KEY']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     
     if missing_vars:
@@ -95,8 +95,8 @@ def initialize_archer():
         human_validation_enabled=True,
         num_simulations_per_prompt=3,
         database_config={
-            "api_url": os.getenv("ARGILLA_API_URL", "http://localhost:6900"),
-            "api_key": os.getenv("ARGILLA_API_KEY", "admin.apikey")
+            "api_url": os.getenv("SUPABASE_API_URL", "http://localhost:6900"),
+            "api_key": os.getenv("SUPABASE_API_KEY", "admin.apikey")
         }
     )
     
@@ -117,15 +117,15 @@ def main():
     
     # Initialize components
     archer_instance = None if args.no_archer else initialize_archer()
-    argilla_db = ArgillaDatabase(
-        api_url=os.getenv("ARGILLA_API_URL", "http://localhost:6900"),
-        api_key=os.getenv("ARGILLA_API_KEY", "admin.apikey")
+    supabase_db = SupabaseDatabase(
+        api_url=os.getenv("SUPABASE_API_URL", "http://localhost:6900"),
+        api_key=os.getenv("SUPABASE_API_KEY", "admin.apikey")
     )
     
     # Initialize the application
     app = DanielsonArcherApp(
         archer_instance=archer_instance,
-        argilla_db=argilla_db,
+        supabase_db=supabase_db,
         max_rounds=2
     )
     

@@ -27,7 +27,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 # Import after path is set
 from data_labelling.archer.archer import Archer
-from data_labelling.archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 from data_labelling.archer.helpers.prompt import Prompt
 from data_labelling.archer.backwardPass.danielson_model import DanielsonModel
 
@@ -63,7 +63,7 @@ class TestArcherDirectFlow(unittest.TestCase):
         load_dotenv(dotenv_path=dotenv_path)
         
         # Check for required environment variables
-        required_vars = ['OPENROUTER_API_KEY', 'ARGILLA_API_URL', 'ARGILLA_API_KEY']
+        required_vars = ['OPENROUTER_API_KEY', 'SUPABASE_API_URL', 'SUPABASE_API_KEY']
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         
         if missing_vars:
@@ -75,16 +75,16 @@ class TestArcherDirectFlow(unittest.TestCase):
         Set up the test by initializing the Archer system components.
         """
         # Initialize the database connection
-        self.argilla_db = ArgillaDatabase(
-            api_url=os.getenv("ARGILLA_API_URL"),
-            api_key=os.getenv("ARGILLA_API_KEY")
+        self.supabase_db = SupabaseDatabase(
+            api_url=os.getenv("SUPABASE_API_URL"),
+            api_key=os.getenv("SUPABASE_API_KEY")
         )
         
         # Connect to the database and initialize datasets
-        connected = self.argilla_db.connect()
+        connected = self.supabase_db.connect()
         self.assertTrue(connected, "Failed to connect to Argilla database")
         
-        initialized = self.argilla_db.initialize_datasets()
+        initialized = self.supabase_db.initialize_datasets()
         self.assertTrue(initialized, "Failed to initialize Argilla datasets")
         
         # Initialize the Danielson model
@@ -131,8 +131,8 @@ class TestArcherDirectFlow(unittest.TestCase):
             human_validation_enabled=False,  # Disable for direct testing
             num_simulations_per_prompt=2,  # Reduce for faster testing
             database_config={
-                "api_url": os.getenv("ARGILLA_API_URL"),
-                "api_key": os.getenv("ARGILLA_API_KEY")
+                "api_url": os.getenv("SUPABASE_API_URL"),
+                "api_key": os.getenv("SUPABASE_API_KEY")
             }
         )
         
@@ -194,7 +194,7 @@ class TestArcherDirectFlow(unittest.TestCase):
             prompt = record["prompt"]
             
             # Store the output
-            output_id = self.argilla_db.store_generated_content(
+            output_id = self.supabase_db.store_generated_content(
                 input_data=json.dumps(input_data),
                 content=content,
                 prompt_id=getattr(prompt, "id", str(uuid.uuid4())),
@@ -204,7 +204,7 @@ class TestArcherDirectFlow(unittest.TestCase):
             self.assertIsNotNone(output_id, "Failed to store generated content")
             
             # Store the evaluation
-            eval_stored = self.argilla_db.store_evaluation(
+            eval_stored = self.supabase_db.store_evaluation(
                 output_id=output_id,
                 score=eval_result.get("score", 3),
                 feedback=eval_result.get("feedback", "No feedback provided"),
@@ -232,7 +232,7 @@ class TestArcherDirectFlow(unittest.TestCase):
             improved_output = "**Performance Analysis**\n\nThe teacher demonstrates proficient classroom culture management as evidenced by the well-organized physical space with \"desks in groups of four\" and the smooth transition at the beginning of class where \"students enter and take their seats quietly.\" The teacher effectively uses questioning strategies to engage students, asking \"What strategy are you using to solve this problem?\" and \"How did you know to apply that approach?\" These questions promote critical thinking and demonstrate respect for student intellect.\n\n**Growth Path**\n\nTo strengthen classroom culture further, the teacher should consider implementing more explicit student-led discussions where peers evaluate each other's mathematical reasoning. This could be accomplished by establishing a structured protocol for mathematical discourse where students use sentence stems to critique reasoning, which would lead to deeper conceptual understanding. Additionally, creating opportunities for students to showcase their problem-solving approaches to the whole class would help validate diverse thinking strategies and reinforce a culture of learning from multiple perspectives."
             
             # Store human feedback
-            human_update = self.argilla_db.store_human_feedback(
+            human_update = self.supabase_db.store_human_feedback(
                 output_id=output_id,
                 score=human_score,
                 feedback=human_feedback,
@@ -290,7 +290,7 @@ class TestArcherDirectFlow(unittest.TestCase):
         Test the database performance metrics functionality.
         """
         # Get performance metrics
-        metrics = self.argilla_db.get_performance_metrics()
+        metrics = self.supabase_db.get_performance_metrics()
         
         # Basic validation of the metrics
         self.assertIsNotNone(metrics, "Performance metrics returned None")
@@ -308,7 +308,7 @@ class TestArcherDirectFlow(unittest.TestCase):
         Test the retrieval of the best prompts from the database.
         """
         # Get the current best prompts
-        best_prompts = self.argilla_db.get_current_best_prompts(top_n=3)
+        best_prompts = self.supabase_db.get_current_best_prompts(top_n=3)
         
         # This might return an empty list if no prompts have been evaluated yet
         self.assertIsNotNone(best_prompts, "Best prompts returned None")

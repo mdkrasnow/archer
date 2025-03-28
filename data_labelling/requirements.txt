@@ -7,7 +7,7 @@ python-dotenv>=1.0.0
 
 
 # Argilla for database
-argilla==2.8.0
+supabase==2.8.0
 
 # LLM API dependencies
 openai>=1.0.0

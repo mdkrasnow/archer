@@ -4,17 +4,17 @@ Tests for the refactored database schema with integrated prompts.
 import unittest
 from unittest.mock import MagicMock, patch
 import json
-from archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 
 class TestDatabaseRefactoring(unittest.TestCase):
     """Test the refactored database schema with integrated prompts."""
     
     def setUp(self):
         """Set up test environment with mock Argilla client."""
-        self.mock_argilla = MagicMock()
-        self.patcher = patch('archer.database.argilla.rg.Argilla', return_value=self.mock_argilla)
+        self.mock_supabase = MagicMock()
+        self.patcher = patch('archer.database.supabase.rg.Argilla', return_value=self.mock_supabase)
         self.mock_rg = self.patcher.start()
-        self.db = ArgillaDatabase(api_url="mock://test", api_key="mock_key")
+        self.db = SupabaseDatabase(api_url="mock://test", api_key="mock_key")
         self.db.connect()
     
     def tearDown(self):
@@ -28,7 +28,7 @@ class TestDatabaseRefactoring(unittest.TestCase):
         
         # Create a Record class mock
         mock_record = MagicMock()
-        patcher = patch('archer.database.argilla.rg.Record', return_value=mock_record)
+        patcher = patch('archer.database.supabase.rg.Record', return_value=mock_record)
         mock_record_class = patcher.start()
         
         try:
@@ -89,11 +89,11 @@ class TestDatabaseRefactoring(unittest.TestCase):
     def test_initialize_datasets_removes_prompt_datasets(self):
         """Test that initialize_datasets no longer creates prompt datasets."""
         # Create a partial mock that only mocks certain methods
-        with patch.object(ArgillaDatabase, '_initialize_records_dataset', return_value=True):
-            with patch.object(ArgillaDatabase, '_initialize_rounds_dataset', return_value=True):
-                with patch.object(ArgillaDatabase, '_initialize_prompt_lineage_dataset', return_value=True):
-                    with patch.object(ArgillaDatabase, '_initialize_outputs_dataset', return_value=True):
-                        with patch.object(ArgillaDatabase, '_initialize_evaluations_dataset', return_value=True):
+        with patch.object(SupabaseDatabase, '_initialize_records_dataset', return_value=True):
+            with patch.object(SupabaseDatabase, '_initialize_rounds_dataset', return_value=True):
+                with patch.object(SupabaseDatabase, '_initialize_prompt_lineage_dataset', return_value=True):
+                    with patch.object(SupabaseDatabase, '_initialize_outputs_dataset', return_value=True):
+                        with patch.object(SupabaseDatabase, '_initialize_evaluations_dataset', return_value=True):
                             # Call initialize_datasets
                             result = self.db.initialize_datasets()
                             

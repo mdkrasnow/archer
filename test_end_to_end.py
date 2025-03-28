@@ -28,7 +28,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 # Import after path is set
 from data_labelling.gradio_display.app import DanielsonArcherApp
 from data_labelling.archer.backwardPass.danielson_model import DanielsonModel
-from data_labelling.archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 from data_labelling.archer.archer import Archer
 from data_labelling.archer.helpers.prompt import Prompt
 from data_labelling.eval.danielson import normalize_score_integer
@@ -62,7 +62,7 @@ class TestEndToEnd(unittest.TestCase):
         load_dotenv(dotenv_path)
         
         # Check for required environment variables
-        required_vars = ['GOOGLE_API_KEY', 'ARGILLA_API_URL', 'ARGILLA_API_KEY']
+        required_vars = ['GOOGLE_API_KEY', 'SUPABASE_API_URL', 'SUPABASE_API_KEY']
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         
         if missing_vars:
@@ -74,16 +74,16 @@ class TestEndToEnd(unittest.TestCase):
         Set up the test by initializing the Archer system and Gradio app.
         """
         # Initialize the database connection
-        self.argilla_db = ArgillaDatabase(
-            api_url=os.getenv("ARGILLA_API_URL"),
-            api_key=os.getenv("ARGILLA_API_KEY")
+        self.supabase_db = SupabaseDatabase(
+            api_url=os.getenv("SUPABASE_API_URL"),
+            api_key=os.getenv("SUPABASE_API_KEY")
         )
         
         # Connect to the database and initialize datasets
-        connected = self.argilla_db.connect()
+        connected = self.supabase_db.connect()
         self.assertTrue(connected, "Failed to connect to Argilla database")
         
-        initialized = self.argilla_db.initialize_datasets()
+        initialized = self.supabase_db.initialize_datasets()
         self.assertTrue(initialized, "Failed to initialize Argilla datasets")
         
         # Initialize the Danielson model
@@ -130,8 +130,8 @@ class TestEndToEnd(unittest.TestCase):
             human_validation_enabled=True,
             num_simulations_per_prompt=3,
             database_config={
-                "api_url": os.getenv("ARGILLA_API_URL"),
-                "api_key": os.getenv("ARGILLA_API_KEY")
+                "api_url": os.getenv("SUPABASE_API_URL"),
+                "api_key": os.getenv("SUPABASE_API_KEY")
             }
         )
         
@@ -139,7 +139,7 @@ class TestEndToEnd(unittest.TestCase):
         self.app = DanielsonArcherApp(
             archer_instance=self.archer,
             danielson_model=self.danielson_model,
-            argilla_db=self.argilla_db
+            supabase_db=self.supabase_db
         )
         
         # Ensure we have a unique test identifier for this run
@@ -207,7 +207,7 @@ class TestEndToEnd(unittest.TestCase):
         human_feedback = f"The AI evaluation was good, but I'd like to see more specific evidence. Test ID: {self.test_run_id}"
         
         # Store human feedback
-        human_update = self.argilla_db.store_human_feedback(
+        human_update = self.supabase_db.store_human_feedback(
             output_id=output_id,
             score=human_score,
             feedback=human_feedback,
@@ -239,7 +239,7 @@ class TestEndToEnd(unittest.TestCase):
         logger.info(f"Found {len(active_prompts)} active prompts")
         
         # Check if performance metrics are available
-        metrics = self.argilla_db.get_performance_metrics()
+        metrics = self.supabase_db.get_performance_metrics()
         self.assertIsNotNone(metrics, "Failed to retrieve performance metrics")
         logger.info("Performance metrics retrieved successfully")
         

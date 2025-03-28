@@ -16,7 +16,7 @@ from pathlib import Path
 # Add the root directory to the path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from data_labelling.archer.database.argilla import ArgillaDatabase
+from data_labelling.archer.database.supabase import SupabaseDatabase
 from data_labelling.archer.archer import Archer
 from data_labelling.archer.helpers.prompt import Prompt
 from data_labelling.gradio_display.app import DanielsonArcherApp
@@ -35,7 +35,7 @@ class TestBackwardPassValidation(unittest.TestCase):
         self.outputs_dataset = MagicMock()
         
         # Configure mock database
-        self.db = ArgillaDatabase(api_url="mock://url", api_key="mock_key")
+        self.db = SupabaseDatabase(api_url="mock://url", api_key="mock_key")
         self.db.client = self.mock_client
         self.db.datasets = {
             "evaluations": self.evaluations_dataset,
@@ -68,7 +68,7 @@ class TestBackwardPassValidation(unittest.TestCase):
         # Initialize app
         self.app = DanielsonArcherApp(
             archer_instance=self.archer,
-            argilla_db=self.db
+            supabase_db=self.db
         )
     
     def test_save_evaluation(self):
