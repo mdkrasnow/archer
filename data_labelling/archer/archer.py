@@ -266,9 +266,13 @@ class Archer:
             # Single input type
             input_rows = [input_data]
         
-        # Limit the number of active prompts per cycle
-        active_prompts = self.active_generator_prompts[:self.max_prompts_per_cycle]
-        self.generator.set_prompts(active_prompts)
+        # Randomly sample prompts from the database and initial prompts
+        sampled_prompts = self._get_random_prompts_for_generation()
+        if not sampled_prompts:
+            # Fallback to initial prompts if no prompts found in database
+            sampled_prompts = self.active_generator_prompts[:self.max_prompts_per_cycle]
+            
+        self.generator.set_prompts(sampled_prompts)
         
         all_evaluations = []
         
@@ -294,20 +298,42 @@ class Archer:
 
                 # Store record with integrated prompt information if database is available
                 if self.database:
-                    # Get prompt ID from database or store new prompt to get ID
-                    generator_prompt_id = self.database.store_prompt(prompt.content, "generator")
+                    # Get prompt ID from database
+                    prompt_id = getattr(prompt, 'id', None)
+                    if not prompt_id:
+                        # If prompt doesn't have an ID, store it to get one
+                        prompt_id = self.database.store_prompt(prompt.content, "generator")
+                    
                     evaluator_prompt_id = self.database.store_prompt(self.evaluator.get_current_prompt(), "evaluator")
                     
-                    self.database.store_record(
+                    # Store the record with the prompt ID
+                    output_id = self.database.store_record(
                         input_data=str(input_row),
                         content=content,
-                        generator_prompt_id=generator_prompt_id,
+                        generator_prompt_id=prompt_id,
                         evaluator_prompt_id=evaluator_prompt_id,
                         prompt_generation=prompt.generation,
                         round_id=str(self.generation_count)
                     )
+                    
+                    # Store the evaluation with the correct prompt_id
+                    if output_id:
+                        score = eval_result.get("score", 0)
+                        feedback = eval_result.get("feedback", "")
+                        improved_output = eval_result.get("improved_output", "")
+                        
+                        self.database.store_evaluation(
+                            output_id=output_id,
+                            score=score,
+                            feedback=feedback,
+                            improved_output=improved_output,
+                            is_human=False
+                        )
+                        
+                        # Update average score for this prompt
+                        self.database.update_prompt_score(prompt_id, score)
 
-        self.performance_tracker.record_generation(self.generation_count, active_prompts)
+        self.performance_tracker.record_generation(self.generation_count, sampled_prompts)
         
         # Increment generation counter
         self.generation_count += 1
@@ -660,3 +686,50 @@ class Archer:
                 print(f"Feedback: {eval_result.get('feedback', 'N/A')}\n")
         
         # Visualization of performance can be added here if desired.
+
+    def _get_random_prompts_for_generation(self) -> List[Prompt]:
+        """
+        Retrieve all available prompts from the database and randomly sample
+        a subset for the current generation cycle.
+        
+        Returns:
+            List[Prompt]: Randomly sampled prompts for this generation cycle
+        """
+        if not self.database:
+            self.logger.warning("No database connection available for prompt sampling")
+            return self.active_generator_prompts[:self.max_prompts_per_cycle]
+        
+        try:
+            # Retrieve all generator prompts from the database
+            all_db_prompts = self.database.get_all_generator_prompts()
+            if not all_db_prompts:
+                self.logger.warning("No prompts found in database, using initial prompts")
+                return self.active_generator_prompts[:self.max_prompts_per_cycle]
+            
+            # Convert database prompts to Prompt objects
+            all_prompts = []
+            for p in all_db_prompts:
+                # Create Prompt object with ID from database
+                prompt = Prompt(p["content"])
+                prompt.id = p["id"]  # Store the database ID on the prompt
+                prompt.average_score = p.get("average_score", 0)
+                prompt.generation = p.get("version", 1)
+                all_prompts.append(prompt)
+            
+            # Add initial prompts if they're not already in the database
+            for initial_prompt in self.active_generator_prompts:
+                if not any(p.content == initial_prompt.content for p in all_prompts):
+                    all_prompts.append(initial_prompt)
+            
+            # Randomly sample prompts
+            import random
+            num_prompts = min(self.max_prompts_per_cycle, len(all_prompts))
+            sampled_prompts = random.sample(all_prompts, num_prompts)
+            
+            self.logger.info(f"Randomly sampled {len(sampled_prompts)} prompts from a pool of {len(all_prompts)}")
+            return sampled_prompts
+            
+        except Exception as e:
+            self.logger.error(f"Error sampling prompts from database: {str(e)}")
+            # Fallback to initial prompts
+            return self.active_generator_prompts[:self.max_prompts_per_cycle]

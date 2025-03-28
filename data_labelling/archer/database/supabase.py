@@ -1090,3 +1090,90 @@ class SupabaseDatabase:
         except Exception as e:
             logger.error(f"Exception in get_prompts_from_records: {str(e)}")
             return []
+
+    def get_all_generator_prompts(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all generator prompts from the database, regardless of their active status.
+        This allows for random sampling of prompts during generation.
+        
+        Returns:
+            List[Dict[str, Any]]: A list of all generator prompts with their attributes
+        """
+        try:
+            response = self.client.table("archer_prompts").select("*")\
+                .eq("prompt_type", "generator").execute()
+            if hasattr(response, 'error') and response.error:
+                logger.error(f"Error fetching generator prompts: {response.error}")
+                return []
+            
+            all_prompts = response.data or []
+            prompt_data = []
+            
+            for prompt in all_prompts:
+                prompt_data.append({
+                    "id": prompt.get("id", "unknown"),
+                    "content": prompt.get("content"),
+                    "average_score": float(prompt.get("average_score") or 0),
+                    "rounds_survived": int(prompt.get("rounds_survived") or 0),
+                    "version": int(prompt.get("version") or 1),
+                    "parent_prompt_id": prompt.get("parent_prompt_id", "root"),
+                    "is_active": prompt.get("is_active", True)
+                })
+            
+            logger.info(f"Retrieved {len(prompt_data)} generator prompts from database")
+            return prompt_data
+        except Exception as e:
+            logger.error(f"Exception in get_all_generator_prompts: {str(e)}")
+            return []
+
+    def update_prompt_score(self, prompt_id: str, new_score: float) -> bool:
+        """
+        Update the average score for a prompt based on a new evaluation score.
+        This calculates a running average of all scores for this prompt.
+        
+        Args:
+            prompt_id: The ID of the prompt to update
+            new_score: The new score to incorporate into the average
+            
+        Returns:
+            bool: True if the update was successful, False otherwise
+        """
+        try:
+            # First get the current prompt data
+            response = self.client.table("archer_prompts").select("*").eq("id", prompt_id).execute()
+            if hasattr(response, 'error') and response.error:
+                logger.error(f"Error fetching prompt to update score: {response.error}")
+                return False
+                
+            if not response.data or len(response.data) == 0:
+                logger.error(f"Prompt with ID {prompt_id} not found")
+                return False
+                
+            prompt_data = response.data[0]
+            current_avg = float(prompt_data.get("average_score") or 0)
+            usage_count = int(prompt_data.get("usage_count") or 0)
+            
+            # Calculate new average
+            if usage_count == 0:
+                new_avg = new_score
+            else:
+                new_avg = (current_avg * usage_count + new_score) / (usage_count + 1)
+                
+            # Update the prompt with new average and increment usage count
+            update_data = {
+                "average_score": new_avg,
+                "usage_count": usage_count + 1,
+                "last_used_at": datetime.now().isoformat()
+            }
+            
+            update_response = self.client.table("archer_prompts").update(update_data).eq("id", prompt_id).execute()
+            if hasattr(update_response, 'error') and update_response.error:
+                logger.error(f"Error updating prompt score: {update_response.error}")
+                return False
+                
+            logger.info(f"Updated average score for prompt {prompt_id} to {new_avg:.2f} (usage count: {usage_count + 1})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Exception in update_prompt_score: {str(e)}")
+            return False

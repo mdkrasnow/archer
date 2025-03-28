@@ -13,9 +13,11 @@ class Prompt:
         generation (int, optional): The generation number of this prompt (for tracking evolution).
         history (list): List of tuples containing previous versions (content, score, feedback).
         llm_call: A function or method to call an LLM with this prompt.
+        id (str, optional): Database ID of the prompt for tracking in the database.
+        average_score (float, optional): Average score from all evaluations of this prompt.
     """
     
-    def __init__(self, content, score=0.0, feedback_or_generation=None, generation=0):
+    def __init__(self, content, score=0.0, feedback_or_generation=None, generation=0, id=None, average_score=0.0):
         """
         Initialize a new Prompt instance.
         
@@ -24,6 +26,8 @@ class Prompt:
             score (float, optional): Initial score for the prompt. Defaults to 0.0.
             feedback_or_generation: Can be either a feedback string or generation number.
             generation (int, optional): Initial generation number. Defaults to 0.
+            id (str, optional): Database ID for this prompt. Defaults to None.
+            average_score (float, optional): Average score from all evaluations. Defaults to 0.0.
         """
         self.content = content
         self.score = score
@@ -38,6 +42,10 @@ class Prompt:
             
         self.history = []
         self.llm_call = None
+        
+        # New attributes for database integration
+        self.id = id
+        self.average_score = average_score
     
     def update(self, new_content, score=None, feedback=None):
         """
