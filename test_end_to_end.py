@@ -79,10 +79,6 @@ class TestEndToEnd(unittest.TestCase):
             api_key=os.getenv("SUPABASE_API_KEY")
         )
         
-        # Connect to the database and initialize datasets
-        connected = self.supabase_db.connect()
-        self.assertTrue(connected, "Failed to connect to Argilla database")
-        
         initialized = self.supabase_db.initialize_datasets()
         self.assertTrue(initialized, "Failed to initialize Argilla datasets")
         
