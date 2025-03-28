@@ -312,51 +312,48 @@ class Archer:
 
     def run_backward_pass(self, evaluations: list) -> bool:
         """
-        Run the backward pass to optimize prompts based on evaluations.
+        Execute the backward pass (learning) process to optimize prompts.
         
         Args:
-            evaluations: List of tuples (Prompt, generated content, evaluation result dict).
+            evaluations: List of tuples (Prompt, generated_text, evaluation_data).
             
         Returns:
-            bool: True if optimization was successful, False otherwise.
+            bool: True if successful, False otherwise.
         """
-        self.logger.info("Starting backward pass optimization")
-        
-        # Check if circuit breaker is open (too many recent errors)
+        # Skip if circuit breaker is open
         if self._circuit_open:
-            time_since_last_attempt = datetime.now() - self._last_optimization_attempt
-            if time_since_last_attempt < self._recovery_time:
-                remaining_time = (self._recovery_time - time_since_last_attempt).total_seconds()
-                self.logger.warning(
-                    f"Circuit breaker is open. Optimization temporarily disabled for "
-                    f"{remaining_time:.0f} more seconds after repeated failures."
-                )
+            recovery_time_elapsed = datetime.now() - self._last_optimization_attempt
+            if recovery_time_elapsed < self._recovery_time:
+                self.logger.warning(f"Circuit breaker open. Try again in {(self._recovery_time - recovery_time_elapsed).seconds} seconds")
                 return False
             else:
-                # Reset circuit breaker after recovery time
-                self.logger.info("Circuit breaker reset after recovery period")
+                self.logger.info("Recovery time elapsed. Resetting circuit breaker.")
                 self._circuit_open = False
-                self._optimization_errors = 0
         
-        # Track optimization attempt time
         self._last_optimization_attempt = datetime.now()
         
         try:
-            # Extract prompts and evaluation data for optimization
-            prompts = [eval_item[0] for eval_item in evaluations]
-            feedback_map = {str(i): eval_item[2].get('feedback', '') for i, eval_item in enumerate(evaluations)}
+            self.logger.info(f"Running backward pass with {len(evaluations)} evaluations")
             
-            # Handle scores safely
+            # No evaluations to process
+            if not evaluations:
+                self.logger.warning("No evaluations to process")
+                return False
+                
+            # Extract prompts and build feedback maps
+            # This is the map of {prompt_id: feedback} and {prompt_id: score}
+            self.logger.info("Extracting prompts and building feedback maps")
+            prompts = []
+            feedback_map = {}
             score_map = {}
-            for i, eval_item in enumerate(evaluations):
-                score = eval_item[2].get('score')
-                if score is None:
-                    score = 3.0  # Default score
-                try:
-                    score_map[str(i)] = float(score)
-                except (ValueError, TypeError):
-                    self.logger.warning(f"Invalid score value '{score}' for evaluation {i}, using default 3.0")
-                    score_map[str(i)] = 3.0
+            
+            for i, (prompt, generated_text, eval_data) in enumerate(evaluations):
+                prompts.append(prompt)
+                pid = str(i)  # Simple ID for the prompt in this batch
+                feedback_map[pid] = eval_data.get("feedback", "")
+                score_map[pid] = float(eval_data.get("score", 0))
+                
+            self.logger.info(f"Built feedback and score maps for {len(prompts)} prompts")
             
             # Optimize prompts using the proper optimizer approach
             if self.adalflow_enabled:
@@ -366,7 +363,7 @@ class Archer:
                     optimization_successful = self.optimizer.optimize_model(model, feedback_map, score_map)
                     if not optimization_successful:
                         self.logger.info("Falling back to regular optimization")
-                        new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
+                        new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map, database=self.database)
                         # Save variants to database directly
                         if self.database:
                             self.optimizer.save_variants_to_database(new_prompts, self.database)
@@ -383,7 +380,7 @@ class Archer:
                     self.logger.error(f"Error in AdaLFlow optimization: {str(e)}")
                     # Fall back to regular optimization
                     self.logger.info("Exception occurred. Falling back to regular optimization")
-                    new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
+                    new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map, database=self.database)
                     # Save variants to database directly
                     if self.database:
                         self.optimizer.save_variants_to_database(new_prompts, self.database)
@@ -391,7 +388,7 @@ class Archer:
                     self.generator.set_prompts(new_prompts)
             else:
                 # Standard optimization
-                new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map)
+                new_prompts = self.optimizer.optimize(prompts, feedback_map, score_map, database=self.database)
                 
                 # Save variants to database directly
                 if self.database:
@@ -415,15 +412,13 @@ class Archer:
         except Exception as e:
             # Increment error count
             self._optimization_errors += 1
-            self.logger.error(f"Error in backward pass: {str(e)}")
             
-            # Check if we need to trip the circuit breaker
+            # Check if we should open the circuit breaker
             if self._optimization_errors >= self._error_threshold:
+                self.logger.error(f"Opening circuit breaker after {self._optimization_errors} errors: {str(e)}")
                 self._circuit_open = True
-                self.logger.error(
-                    f"Circuit breaker tripped after {self._optimization_errors} consecutive errors. "
-                    f"Optimization disabled for {self._recovery_time.total_seconds()} seconds."
-                )
+            else:
+                self.logger.error(f"Error {self._optimization_errors}/{self._error_threshold} in backward pass: {str(e)}")
             
             return False
 

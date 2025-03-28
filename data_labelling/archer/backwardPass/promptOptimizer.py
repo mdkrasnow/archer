@@ -455,7 +455,7 @@ class PromptOptimizer:
             parameters.append(param)
         return parameters
     
-    def optimize(self, prompt_objs, feedback_map, score_map):
+    def optimize(self, prompt_objs, feedback_map, score_map, database=None):
         """
         Optimize a batch of prompts based on evaluation feedback.
         
@@ -466,6 +466,7 @@ class PromptOptimizer:
             prompt_objs: List of Prompt objects to optimize.
             feedback_map: Dictionary mapping prompt IDs to feedback strings.
             score_map: Dictionary mapping prompt IDs to scores.
+            database: Optional database connection to ensure prompts are stored.
             
         Returns:
             List[Prompt]: The optimized prompt objects, or the original prompts if optimization fails.
@@ -480,6 +481,22 @@ class PromptOptimizer:
         if not prompt_objs:
             logger.warning("No prompts provided for optimization")
             return []
+        
+        # Ensure all prompts are in the database before optimization
+        prompt_db_ids = {}
+        if database and hasattr(database, 'store_generator_prompt'):
+            logger.info("Checking if prompts exist in database before batch optimization")
+            for i, prompt in enumerate(prompt_objs):
+                # Store prompt in database if not already there
+                db_prompt_id = database.store_generator_prompt(
+                    content=prompt.content,
+                    version=prompt.generation
+                )
+                if db_prompt_id:
+                    prompt_db_ids[str(i)] = db_prompt_id
+                    logger.info(f"Prompt {i} stored/retrieved from database with ID: {db_prompt_id}")
+                else:
+                    logger.warning(f"Failed to store/retrieve prompt {i} in database")
         
         # If AdaLFlow is enabled, use it for optimization
         if self.adalflow_enabled and ADALFLOW_AVAILABLE:
@@ -531,7 +548,7 @@ class PromptOptimizer:
                 except Exception as e:
                     logger.error(f"Error in optimizer: {str(e)}")
                     logger.warning("Falling back to standard optimization")
-                    return self._fallback_optimize(prompt_objs, feedback_map, score_map)
+                    return self._fallback_optimize(prompt_objs, feedback_map, score_map, database=database)
                 
                 # Step 5: Return updated prompt objects (new generation)
                 logger.info("Step 5: Creating new prompt objects")
@@ -561,6 +578,21 @@ class PromptOptimizer:
                     logger.info(f"Generated {len(variants)} additional variants")
                     new_prompts.extend(variants)
                     
+                    # Save all prompts to database if available
+                    if database and hasattr(database, 'store_generator_prompt'):
+                        for i, prompt in enumerate(new_prompts):
+                            # Determine parent ID from the mapping
+                            original_idx = i % len(prompt_objs)  # Map back to original prompt index
+                            parent_id = prompt_db_ids.get(str(original_idx))
+                            
+                            # Store in database
+                            if i < len(prompt_objs):  # This is a direct optimization
+                                self.save_variants_to_database([prompt], database, parent_prompt_id=parent_id)
+                            else:  # This is a variant
+                                parent_idx = (i - len(prompt_objs)) % len(prompt_objs)
+                                parent_id = prompt_db_ids.get(str(parent_idx))
+                                self.save_variants_to_database([prompt], database, parent_prompt_id=parent_id)
+                    
                     # The variation is complete - stop the optimization process here
                     logger.info("Optimization and variation completed - stopping optimization process")
                 except Exception as e:
@@ -572,13 +604,13 @@ class PromptOptimizer:
                 logger.error(f"Error in AdaLFlow optimization: {str(e)}")
                 logger.warning("Falling back to standard optimization")
                 # Fallback to standard optimization if AdaLFlow fails
-                return self._fallback_optimize(prompt_objs, feedback_map, score_map)
+                return self._fallback_optimize(prompt_objs, feedback_map, score_map, database=database)
         else:
             # Use standard optimization approach
             logger.info("Using standard optimization (non-AdaLFlow)")
-            return self._fallback_optimize(prompt_objs, feedback_map, score_map)
+            return self._fallback_optimize(prompt_objs, feedback_map, score_map, database=database)
 
-    def _fallback_optimize(self, prompt_objs, feedback_map, score_map, variant_limit=4):
+    def _fallback_optimize(self, prompt_objs, feedback_map, score_map, variant_limit=4, database=None):
         """
         Fallback optimization method using standard LLM approach with safety limits.
         
@@ -587,12 +619,29 @@ class PromptOptimizer:
             feedback_map: Dictionary mapping prompt IDs to feedback strings.
             score_map: Dictionary mapping prompt IDs to scores.
             variant_limit: Maximum number of variants to generate.
+            database: Optional database connection to save variants
             
         Returns:
             List[Prompt]: The optimized prompt objects.
         """
         logger = logging.getLogger(__name__)
         logger.info(f"Using fallback optimization for {len(prompt_objs)} prompts")
+        
+        # Ensure all prompts are in the database before optimization
+        prompt_db_ids = {}
+        if database and hasattr(database, 'store_generator_prompt'):
+            logger.info("Checking if prompts exist in database before fallback optimization")
+            for i, prompt in enumerate(prompt_objs):
+                # Store prompt in database if not already there
+                db_prompt_id = database.store_generator_prompt(
+                    content=prompt.content,
+                    version=prompt.generation
+                )
+                if db_prompt_id:
+                    prompt_db_ids[str(i)] = db_prompt_id
+                    logger.info(f"Prompt {i} stored/retrieved from database with ID: {db_prompt_id}")
+                else:
+                    logger.warning(f"Failed to store/retrieve prompt {i} in database")
         
         # Safety check - don't optimize too many prompts at once
         if len(prompt_objs) > 10:
@@ -644,6 +693,17 @@ class PromptOptimizer:
                 new_prompts.append(new_prompt)
                 successful_optimizations += 1
                 
+                # Save the optimized prompt to database
+                if database and hasattr(database, 'store_generator_prompt'):
+                    parent_id = prompt_db_ids.get(pid)
+                    if parent_id:
+                        prompt_id = database.store_generator_prompt(
+                            content=improved_content,
+                            parent_prompt_id=parent_id,
+                            version=prompt.generation + 1
+                        )
+                        logger.info(f"Saved optimized prompt {i} with ID: {prompt_id}")
+                
             except Exception as e:
                 logger.error(f"Error optimizing prompt {i}: {str(e)}")
                 optimization_errors += 1
@@ -681,6 +741,27 @@ class PromptOptimizer:
                     variants = future.result(timeout=120)  # 2 minute timeout for the entire variant generation
                     generation_time = time.time() - start_time
                     logger.info(f"Generated {len(variants)} variants in {generation_time:.2f} seconds")
+                    
+                    # Save variants to database
+                    if database and hasattr(database, 'store_generator_prompt'):
+                        for j, new_prompt in enumerate(new_prompts):
+                            # Find original prompt index
+                            orig_idx = j % len(prompt_objs)
+                            parent_db_id = prompt_db_ids.get(str(orig_idx))
+                            
+                            # Get variants related to this prompt
+                            prompt_variants = []
+                            for variant in variants:
+                                # Simple heuristic to match variants to their base prompts
+                                # This is a simplification; in reality, need a better method to track this relationship
+                                if variant.generation == new_prompt.generation + 1:
+                                    prompt_variants.append(variant)
+                            
+                            # Save them to database
+                            if prompt_variants and parent_db_id:
+                                self.save_variants_to_database(prompt_variants, database, parent_prompt_id=parent_db_id)
+                    
+                    # Add variants to new_prompts
                     new_prompts.extend(variants)
                     
                     # The variation is complete - stop the optimization process here
@@ -866,6 +947,24 @@ class PromptOptimizer:
         Returns:
             List of best performing Prompt objects after optimization and evaluation.
         """
+        logger = logging.getLogger(__name__)
+        
+        # Step 0: Ensure all prompts being optimized are in the database
+        if database and hasattr(database, 'store_generator_prompt'):
+            logger.info("Checking if prompts exist in database before optimization")
+            prompt_id_map = {}
+            for prompt_id, prompt in model.prompts.items():
+                # Store prompt in database if not already there
+                db_prompt_id = database.store_generator_prompt(
+                    content=prompt.content,
+                    version=prompt.generation
+                )
+                if db_prompt_id:
+                    prompt_id_map[prompt_id] = db_prompt_id
+                    logger.info(f"Prompt {prompt_id} stored/retrieved from database with ID: {db_prompt_id}")
+                else:
+                    logger.warning(f"Failed to store/retrieve prompt {prompt_id} in database")
+        
         # Step 1: Optimize the model's prompts directly
         if model.adalflow_enabled and self.adalflow_enabled:
             optimized = self.optimize_model(model, feedback_map, score_map)
@@ -897,7 +996,9 @@ class PromptOptimizer:
             
             # Save variants to database if available
             if database:
-                self.save_variants_to_database(variants, database, parent_prompt_id=prompt_id)
+                # Use the mapped database ID as parent if available
+                parent_id = prompt_id_map.get(prompt_id, prompt_id) if database and prompt_id_map else prompt_id
+                self.save_variants_to_database(variants, database, parent_prompt_id=parent_id)
         
         # Step 3: Add all prompts to a combined list for evaluation
         all_prompts = list(model.prompts.values()) + variant_prompts
