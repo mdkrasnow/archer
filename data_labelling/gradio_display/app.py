@@ -68,7 +68,7 @@ class DanielsonArcherApp:
                 supabase_db: Optional[SupabaseDatabase] = None,
                 api_url: Optional[str] = None,
                 api_key: Optional[str] = None,
-                max_rounds: int = 1):
+                max_rounds: int = 2):
         
         """
         Initialize the DanielsonArcherApp instance.
@@ -96,6 +96,19 @@ class DanielsonArcherApp:
                 Prompt("Create a detailed Danielson framework evaluation for component {component_id}. Analyze the teacher's performance using this evidence: {input}")
             ]
             
+            # Store prompts in database and ensure they have proper IDs before initializing Archer
+            if self.db:
+                logger = logging.getLogger(__name__)
+                logger.info("Storing initial prompts in database before Archer initialization")
+                for i, prompt in enumerate(initial_prompts):
+                    prompt_id = self.db.store_generator_prompt(content=prompt.content)
+                    if prompt_id:
+                        # Set the database ID on the prompt object
+                        prompt.id = prompt_id
+                        logger.info(f"Stored initial prompt {i+1} with ID: {prompt_id}")
+                    else:
+                        logger.warning(f"Failed to store initial prompt {i+1} in database")
+            
             # Initialize Archer with the Danielson model
             self.archer = Archer(
                 generator_model_name="gemini-2.0-flash",
@@ -111,6 +124,17 @@ class DanielsonArcherApp:
             )
         else:
             self.archer = archer_instance
+            
+            # If we have an existing Archer instance, make sure its prompts have IDs
+            if self.db and hasattr(self.archer, 'active_prompts') and self.archer.active_prompts:
+                logger = logging.getLogger(__name__)
+                logger.info("Ensuring existing Archer prompts have database IDs")
+                for i, prompt in enumerate(self.archer.active_prompts):
+                    if not hasattr(prompt, 'id') or not prompt.id:
+                        prompt_id = self.db.store_generator_prompt(content=prompt.content)
+                        if prompt_id:
+                            prompt.id = prompt_id
+                            logger.info(f"Stored existing prompt {i+1} with ID: {prompt_id}")
         
         # Initialize state variables
         self.current_data = None
@@ -256,11 +280,41 @@ class DanielsonArcherApp:
                 "component_id": component_id
             })
             
-            # Generate a prompt ID if we don't have one from Archer
-            prompt_id = str(uuid.uuid4())
-            if hasattr(self, 'archer') and self.archer and hasattr(self.archer, 'active_prompts') and self.archer.active_prompts:
-                prompt_id = getattr(self.archer.active_prompts[0], 'id', prompt_id)
+            # Get a valid prompt ID - either from active prompts or create a new one
+            prompt_id = None
             
+            # First try to get ID from Archer's active prompts
+            if hasattr(self, 'archer') and self.archer and hasattr(self.archer, 'active_prompts') and self.archer.active_prompts:
+                for prompt in self.archer.active_prompts:
+                    if hasattr(prompt, 'id') and prompt.id:
+                        # Verify the prompt ID exists in the database
+                        try:
+                            response = self.db.client.table("archer_prompts").select("id").eq("id", prompt.id).execute()
+                            if response and hasattr(response, 'data') and len(response.data) > 0:
+                                prompt_id = prompt.id
+                                logger.info(f"Using verified prompt ID from active prompts: {prompt_id}")
+                                break
+                        except Exception as e:
+                            logger.error(f"Error verifying prompt ID: {str(e)}")
+            
+            # If we couldn't get a valid ID, create a new prompt
+            if not prompt_id:
+                # Use the content of the first active prompt if available
+                prompt_content = None
+                if hasattr(self, 'archer') and self.archer and hasattr(self.archer, 'active_prompts') and self.archer.active_prompts:
+                    prompt_content = self.archer.active_prompts[0].content
+                else:
+                    # Create a default prompt if no active prompts
+                    prompt_content = f"Generate a comprehensive analysis for Danielson component {component_id} based on classroom observation notes."
+                
+                # Store the prompt in the database to get a valid ID
+                prompt_id = self.db.store_generator_prompt(content=prompt_content)
+                logger.info(f"Created new prompt in database with ID: {prompt_id}")
+            
+            if not prompt_id:
+                logger.error("Failed to get a valid prompt ID")
+                return False
+                
             logger.info(f"Using prompt ID: {prompt_id}")
             
             # Store the generated content
@@ -650,6 +704,31 @@ class DanielsonArcherApp:
             self.create_interface()
         
         self.app.launch(share=share, server_port=server_port)
+
+    def fix_missing_prompt_ids(self, limit: int = 100) -> int:
+        """
+        Fix evaluations with missing prompt IDs.
+        
+        Args:
+            limit: Maximum number of evaluations to fix
+            
+        Returns:
+            Number of fixed evaluations
+        """
+        logger = logging.getLogger(__name__)
+        logger.info(f"Fixing missing prompt IDs (limit: {limit})")
+        
+        if not self.db:
+            logger.error("No database connection available")
+            return 0
+            
+        try:
+            fixed_count = self.db.fix_missing_prompt_ids(limit=limit)
+            logger.info(f"Fixed {fixed_count} evaluations with missing prompt IDs")
+            return fixed_count
+        except Exception as e:
+            logger.error(f"Error fixing missing prompt IDs: {str(e)}")
+            return 0
 
 
 # Run the app if this file is executed directly

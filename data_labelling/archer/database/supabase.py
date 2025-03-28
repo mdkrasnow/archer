@@ -175,11 +175,49 @@ class SupabaseDatabase:
             try:
                 response = self.client.table("archer_prompts").select("id").eq("id", prompt_id).execute()
                 prompt_exists = response and hasattr(response, 'data') and len(response.data) > 0
-            except Exception:
-                logger.warning(f"Failed to verify if prompt ID exists: {prompt_id}")
+            except Exception as e:
+                logger.warning(f"Failed to verify if prompt ID exists: {prompt_id}, error: {str(e)}")
             
+            # If prompt doesn't exist, try to fetch it or create a new one
             if not prompt_exists:
-                logger.warning(f"Prompt ID {prompt_id} does not exist in prompts table. Content may not be properly associated.")
+                logger.warning(f"Prompt ID {prompt_id} does not exist in prompts table. Attempting to create it.")
+                
+                # Create a default prompt entry
+                try:
+                    # Use a placeholder content to avoid nulls
+                    placeholder_content = "Generated prompt placeholder"
+                    
+                    # Create a new prompt with the given ID if possible
+                    data = {
+                        "id": prompt_id,
+                        "content": placeholder_content,
+                        "prompt_type": "generator",
+                        "version": 1,
+                        "average_score": 0.0,
+                        "rounds_survived": 1,
+                        "is_active": True,
+                        "created_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    response = self.client.table("archer_prompts").insert(data).execute()
+                    if response and hasattr(response, 'data') and len(response.data) > 0:
+                        logger.info(f"Created new prompt with ID: {prompt_id}")
+                        prompt_exists = True
+                    else:
+                        # If we can't create a prompt with the provided ID, generate a new one
+                        logger.warning(f"Could not create prompt with ID: {prompt_id}. Generating a new one.")
+                        new_prompt_id = self.store_generator_prompt(
+                            content=placeholder_content
+                        )
+                        if new_prompt_id:
+                            logger.info(f"Created new prompt with generated ID: {new_prompt_id}")
+                            prompt_id = new_prompt_id
+                            prompt_exists = True
+                        else:
+                            logger.error("Failed to create a new prompt. Content may not be properly associated.")
+                except Exception as e:
+                    logger.error(f"Error creating prompt: {str(e)}")
             
             output_id = str(uuid.uuid4())
             data = {
@@ -220,20 +258,85 @@ class SupabaseDatabase:
                 logger.error(f"Output with ID {output_id} not found")
                 return False
 
-            # Get prompt ID from output and verify it exists
+            # Get prompt ID from output and ensure it exists
             prompt_id = output.get("prompt_id", "")
+            
             if not prompt_id:
-                logger.warning(f"Output {output_id} is missing prompt_id")
-                # Try to find a matching prompt by content
+                logger.warning(f"Output {output_id} is missing prompt_id. Attempting to find or create one.")
+                
+                # 1. Try to find a matching prompt by content in archer_records
                 try:
                     prompt_content = output.get("generated_content", "")[:100]  # Use part of content as a signature
                     if prompt_content:
                         records = self.client.table("archer_records").select("generator_prompt_id").eq("generated_content", output.get("generated_content", "")).execute()
-                        if records and hasattr(records, 'data') and records.data:
+                        if records and hasattr(records, 'data') and records.data and records.data[0].get("generator_prompt_id"):
                             prompt_id = records.data[0].get("generator_prompt_id", "")
-                            logger.info(f"Found prompt ID {prompt_id} by content matching")
+                            logger.info(f"Found prompt ID {prompt_id} by content matching in records")
                 except Exception as e:
-                    logger.error(f"Error finding prompt by content: {str(e)}")
+                    logger.error(f"Error finding prompt by content in records: {str(e)}")
+                
+                # 2. If still no prompt_id, try to find a matching prompt by content in archer_prompts
+                if not prompt_id:
+                    try:
+                        # Use generated content as a signature to find matching prompts
+                        content_signature = output.get("generated_content", "")[:50]
+                        response = self.client.table("archer_prompts").select("id, content").execute()
+                        
+                        if response and hasattr(response, 'data') and response.data:
+                            # Look for similar content
+                            for prompt in response.data:
+                                if content_signature in prompt.get("content", ""):
+                                    prompt_id = prompt.get("id")
+                                    logger.info(f"Found prompt ID {prompt_id} with similar content")
+                                    break
+                    except Exception as e:
+                        logger.error(f"Error finding prompt by similar content: {str(e)}")
+                
+                # 3. If still no prompt_id, create a new prompt
+                if not prompt_id:
+                    logger.info("Creating new prompt since none found")
+                    prompt_content = "Evaluation prompt created from output " + output_id
+                    prompt_id = self.store_generator_prompt(content=prompt_content)
+                    
+                    if prompt_id:
+                        logger.info(f"Created new prompt with ID: {prompt_id}")
+                        
+                        # Also update the output record with this prompt_id
+                        try:
+                            update_data = {"prompt_id": prompt_id}
+                            self.client.table("archer_outputs").update(update_data).eq("id", output_id).execute()
+                            logger.info(f"Updated output {output_id} with prompt_id {prompt_id}")
+                        except Exception as e:
+                            logger.error(f"Error updating output with new prompt_id: {str(e)}")
+                    else:
+                        logger.error("Failed to create a new prompt")
+                        # Continue anyway with a fallback UUID
+                        prompt_id = str(uuid.uuid4())
+                        logger.warning(f"Using fallback UUID as prompt_id: {prompt_id}")
+            
+            # Verify the prompt exists in the database
+            if prompt_id:
+                try:
+                    response = self.client.table("archer_prompts").select("id").eq("id", prompt_id).execute()
+                    prompt_exists = response and hasattr(response, 'data') and len(response.data) > 0
+                    
+                    if not prompt_exists:
+                        logger.warning(f"Prompt ID {prompt_id} not found in database. Creating it.")
+                        # Create a placeholder prompt with this ID
+                        placeholder_content = "Placeholder prompt created during evaluation storage"
+                        data = {
+                            "id": prompt_id,
+                            "content": placeholder_content,
+                            "prompt_type": "generator",
+                            "version": 1,
+                            "is_active": True,
+                            "created_at": datetime.now().isoformat(),
+                            "updated_at": datetime.now().isoformat()
+                        }
+                        self.client.table("archer_prompts").insert(data).execute()
+                        logger.info(f"Created placeholder prompt with ID: {prompt_id}")
+                except Exception as e:
+                    logger.error(f"Error verifying prompt existence: {str(e)}")
 
             evaluation_id = str(uuid.uuid4())
             
@@ -1177,3 +1280,102 @@ class SupabaseDatabase:
         except Exception as e:
             logger.error(f"Exception in update_prompt_score: {str(e)}")
             return False
+
+    def fix_missing_prompt_ids(self, limit: int = 100) -> int:
+        """
+        Fix evaluations with missing prompt IDs by finding or creating appropriate prompt IDs.
+        
+        Args:
+            limit: Maximum number of evaluations to fix
+            
+        Returns:
+            Number of fixed evaluations
+        """
+        try:
+            logger.info(f"Looking for evaluations with missing prompt IDs (limit: {limit})")
+            
+            # Fetch evaluations with null prompt_id
+            success, records = self._safe_execute(
+                self.client.table("archer_evaluations").select("*")
+                    .is_("prompt_id", "null").limit(limit),
+                "fetching evaluations with null prompt_id"
+            )
+            
+            if not success:
+                logger.error("Failed to fetch evaluations with null prompt_id")
+                return 0
+                
+            records = records or []
+            logger.info(f"Found {len(records)} evaluations with null prompt_id")
+            
+            if not records:
+                return 0
+            
+            fixed_count = 0
+            
+            for evaluation in records:
+                eval_id = evaluation.get("id")
+                output_id = evaluation.get("output_id")
+                
+                if not output_id:
+                    logger.warning(f"Evaluation {eval_id} has null output_id, skipping")
+                    continue
+                
+                logger.info(f"Fixing evaluation {eval_id} for output {output_id}")
+                
+                # Get the output
+                output = self._get_output(output_id)
+                if not output:
+                    logger.warning(f"Output {output_id} not found for evaluation {eval_id}")
+                    continue
+                
+                # Get prompt ID from output
+                prompt_id = output.get("prompt_id")
+                
+                if not prompt_id:
+                    logger.info(f"Output {output_id} also has null prompt_id, searching for a match")
+                    
+                    # Try to find a prompt by content match in records
+                    try:
+                        generated_content = output.get("generated_content", "")
+                        if generated_content:
+                            records_response = self.client.table("archer_records").select("generator_prompt_id").eq("generated_content", generated_content).execute()
+                                
+                            if records_response and hasattr(records_response, 'data') and records_response.data:
+                                prompt_id = records_response.data[0].get("generator_prompt_id")
+                                if prompt_id:
+                                    logger.info(f"Found prompt ID {prompt_id} by content matching in records")
+                    except Exception as e:
+                        logger.error(f"Error finding prompt by content: {str(e)}")
+                
+                # If still no prompt_id, create a new one
+                if not prompt_id:
+                    logger.info(f"Creating new prompt for evaluation {eval_id}")
+                    prompt_content = f"Retroactively created prompt for evaluation {eval_id}"
+                    prompt_id = self.store_generator_prompt(content=prompt_content)
+                    
+                    if not prompt_id:
+                        logger.error(f"Failed to create prompt for evaluation {eval_id}")
+                        continue
+                    
+                    # Also update the output with this prompt_id
+                    try:
+                        self.client.table("archer_outputs").update({"prompt_id": prompt_id}).eq("id", output_id).execute()
+                        logger.info(f"Updated output {output_id} with prompt_id {prompt_id}")
+                    except Exception as e:
+                        logger.error(f"Error updating output with new prompt_id: {str(e)}")
+                
+                # Update the evaluation with the prompt_id
+                try:
+                    self.client.table("archer_evaluations").update({"prompt_id": prompt_id}).eq("id", eval_id).execute()
+                    logger.info(f"Updated evaluation {eval_id} with prompt_id {prompt_id}")
+                    fixed_count += 1
+                except Exception as e:
+                    logger.error(f"Error updating evaluation with prompt_id: {str(e)}")
+            
+            logger.info(f"Fixed {fixed_count} evaluations with missing prompt IDs")
+            return fixed_count
+            
+        except Exception as e:
+            logger.error(f"Exception in fix_missing_prompt_ids: {str(e)}")
+            return 0
