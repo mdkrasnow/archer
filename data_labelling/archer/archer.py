@@ -209,6 +209,13 @@ class Archer:
         self.active_generator_prompts = initial_prompts  # Store prompts directly
         self.generator.set_prompts(self.active_generator_prompts)
 
+        # Store initial prompts in the database if available
+        if self.database:
+            self.logger.info(f"Storing {len(self.active_generator_prompts)} initial prompts in database")
+            for i, prompt in enumerate(self.active_generator_prompts):
+                prompt_id = self.database.store_generator_prompt(content=prompt.content)
+                self.logger.info(f"Stored initial prompt {i+1} with ID: {prompt_id}")
+
         self.generation_count = 0
         
         # Store candidate prompts for evaluation
@@ -387,10 +394,27 @@ class Archer:
             
             # Store optimized prompts in the database if available
             if self.database:
-                for prompt in self.active_generator_prompts:
-                    # The prompts are already stored in records, no need for separate storage
-                    # We can update lineage information if needed
-                    pass
+                self.logger.info(f"Storing {len(self.active_generator_prompts)} optimized prompts in database")
+                for i, prompt in enumerate(self.active_generator_prompts):
+                    # Store each prompt in the database
+                    prompt_id = self.database.store_generator_prompt(
+                        content=prompt.content,
+                        version=prompt.generation
+                    )
+                    self.logger.info(f"Stored optimized prompt {i+1} with ID: {prompt_id}")
+                    
+                    # Update performance metrics for the prompt
+                    if prompt_id:
+                        success = self.database.update_generator_prompt_performance(
+                            prompt_id=prompt_id,
+                            avg_score=prompt.score,
+                            rounds_survived=1,  # This is a new prompt
+                            is_active=True
+                        )
+                        if success:
+                            self.logger.info(f"Updated performance metrics for prompt ID: {prompt_id}")
+                        else:
+                            self.logger.warning(f"Failed to update performance metrics for prompt ID: {prompt_id}")
 
             # Reset error count on successful completion
             self._optimization_errors = 0

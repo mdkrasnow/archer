@@ -240,6 +240,24 @@ class SupabaseDatabase:
         Store a prompt (either generator or evaluator) in the consolidated archer_prompts table.
         """
         try:
+            # Check if a prompt with the same content already exists
+            response = self.client.from_("archer_prompts")\
+                .select("id, content, prompt_type")\
+                .eq("prompt_type", prompt_type)\
+                .execute()
+            
+            # If response is successful, check for duplicates
+            if response and hasattr(response, 'data'):
+                existing_prompts = response.data or []
+                for existing_prompt in existing_prompts:
+                    if existing_prompt.get("content") == content:
+                        # Prompt already exists, return its ID
+                        prompt_id = existing_prompt.get('id')
+                        logger.info(f"Found existing {prompt_type} prompt with matching content, reusing ID: {prompt_id}")
+                        logger.debug(f"Duplicate prompt content: {content[:50]}...")
+                        return prompt_id
+            
+            # No duplicate found, create a new prompt
             prompt_id = str(uuid.uuid4())
             data = {
                 "id": prompt_id,
